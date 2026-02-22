@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RP Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2.11.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #tsparticles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        #chat-container {
+            position: relative;
+            z-index: 1;
+        }
+        #messages {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            height: 60vh;
+            overflow-y: auto;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        #messages .message {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        #messages .message .author {
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        #messages .message .content {
+            color: #e5e7eb;
+        }
+        #messages .message .time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+        .chat-input {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        input, textarea, select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        select option {
+            background: #1f2937;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen">
+    <canvas id="tsparticles"></canvas>
+    
+    <div id="chat-container" class="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 class="text-3xl font-bold text-white mb-6 text-center">RP Chat</h1>
+        
+        <div id="setup-panel" class="bg-gray-800 bg-opacity-80 rounded-xl p-6 mb-6">
+            <h2 class="text-xl text-white mb-4">Настройка персонажа</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-300 mb-2">Имя персонажа</label>
+                    <input type="text" id="character-name" class="w-full px-4 py-2 rounded-lg" placeholder="Введите имя персонажа">
+                </div>
+                <div>
+                    <label class="block text-gray-300 mb-2">Локация</label>
+                    <select id="location-select" class="w-full px-4 py-2 rounded-lg">
+                        <option value="">Выберите локацию...</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="joinChat()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                Войти в чат
+            </button>
+        </div>
+        
+        <div id="chat-panel" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="location-name" class="text-xl text-white"></h2>
+                <button onclick="leaveChat()" class="text-red-400 hover:text-red-300">Покинуть локацию</button>
+            </div>
+            
+            <div id="messages"></div>
+            
+            <div class="chat-input">
+                <div class="flex flex-col gap-3">
+                    <input type="text" id="character-name-display" class="px-4 py-2 rounded-lg" readonly>
+                    <textarea id="message" class="w-full px-4 py-2 rounded-lg" rows="3" placeholder="Введите сообщение (поддерживает markdown)"></textarea>
+                    <button onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                        Отправить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let currentLocationId = null;
+        
+        tsParticles.load("tsparticles", {
+            fpsLimit: 60,
+            background: { color: { value: "transparent" } },
+            particles: {
+                number: { value: 150 },
+                color: { value: ["#60a5fa", "#a78bfa", "#f472b6"] },
+                shape: { type: "circle" },
+                opacity: { value: 0.6, random: true },
+                size: { value: 2, random: true },
+                move: {
+                    enable: true,
+                    speed: 0.5,
+                    direction: "none",
+                    random: true,
+                    straight: false,
+                },
+                links: {
+                    enable: true,
+                    distance: 100,
+                    color: "#6366f1",
+                    opacity: 0.2,
+                    width: 1,
+                },
+            },
+            interactivity: {
+                events: {
+                    onHover: { enable: true, mode: "repulse" },
+                },
+                modes: {
+                    repulse: { distance: 100, duration: 0.4 },
+                },
+            },
+            detectRetina: true,
+        });
+
+        async function loadLocations() {
+            const response = await fetch('/api/locations');
+            const locations = await response.json();
+            const select = document.getElementById('location-select');
+            locations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc.id;
+                option.textContent = loc.name;
+                select.appendChild(option);
+            });
+        }
+
+        function joinChat() {
+            const characterName = document.getElementById('character-name').value.trim();
+            const locationId = parseInt(document.getElementById('location-select').value);
+            const locationName = document.getElementById('location-select').options[document.getElementById('location-select').selectedIndex].text;
+            
+            if (!characterName || !locationId) {
+                alert('Введите имя персонажа и выберите локацию');
+                return;
+            }
+
+            currentLocationId = locationId;
+            ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
+
+            ws.onopen = async () => {
+                const locResponse = await fetch(`/api/locations/${locationId}`);
+                const locationData = await locResponse.json();
+                
+                document.body.style.backgroundImage = `url('${locationData.background_url}')`;
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundPosition = 'center';
+                document.body.style.backgroundAttachment = 'fixed';
+                
+                document.getElementById('location-name').textContent = locationData.name;
+                
+                ws.send(JSON.stringify({ type: 'set_character', character_name: characterName }));
+                ws.send(JSON.stringify({ type: 'set_location', location_id: locationId }));
+                
+                document.getElementById('setup-panel').classList.add('hidden');
+                document.getElementById('chat-panel').classList.remove('hidden');
+                document.getElementById('character-name-display').value = characterName;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'message') {
+                    addMessage(data);
+                } else if (data.type === 'location_set') {
+                    data.messages.forEach(addMessage);
+                } else if (data.type === 'error') {
+                    alert(data.message);
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('chat-panel').classList.add('hidden');
+                document.getElementById('setup-panel').classList.remove('hidden');
+                document.getElementById('messages').innerHTML = '';
+            };
+        }
+
+        function leaveChat() {
+            if (ws) {
+                ws.close();
+            }
+            document.body.style.backgroundImage = '';
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function addMessage(data) {
+            const messagesDiv = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message';
+            
+            const time = new Date(data.created_at).toLocaleTimeString();
+            const renderedText = marked.parse(data.text);
+            
+            div.innerHTML = `
+                <div class="author">${escapeHtml(data.character_name)}</div>
+                <div class="content">${renderedText}</div>
+                <div class="time">${time}</div>
+            `;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message');
+            const text = messageInput.value.trim();
+            
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'message', text: text }));
+                messageInput.value = '';
+            }
+        }
+
+        document.getElementById('message').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        loadLocations();
+    </script>
+</body>
+</html>
