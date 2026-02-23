@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.models.models import Location
 from app.routers import auth
-from app.routers.http import locations
+from app.routers.http import characters, locations
 from app.routers.websocket import chat
 
 
@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
 print_logo()
 app = FastAPI(
     lifespan=lifespan,
-    title="RP Chat API",
+    title="MatrixAPI",
     description="Ролевой движок на базе веб-чата с простым API",
     version="0.1.0",
 )
@@ -97,15 +97,15 @@ def read_root(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
 
-@app.get("/chat", response_class=HTMLResponse, summary="Chat interface")
-def read_chat(request: Request):
+@app.get("/login", response_class=HTMLResponse, summary="Login page")
+def read_login(request: Request):
     """
-    Renders the chat interface.
+    Renders the login page.
 
-    WHY: Main game interface for role-playing interactions.
-    HOW: Returns the chat.html template with all required components.
+    WHY: Allows users to authenticate.
+    HOW: Returns the login.html template.
     """
-    return templates.TemplateResponse("chat.html", {"request": request})
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/register", response_class=HTMLResponse, summary="Registration page")
@@ -119,9 +119,32 @@ def read_register(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 
+@app.get("/chat", response_class=HTMLResponse, summary="Chat interface")
+def read_chat(request: Request):
+    """
+    Renders the chat interface.
+
+    WHY: Main game interface for role-playing interactions.
+    HOW: Returns the chat.html template with all required components.
+    """
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+
+@app.get("/dashboard", response_class=HTMLResponse, summary="User dashboard")
+def read_dashboard(request: Request):
+    """
+    Renders the user dashboard.
+
+    WHY: Central hub for character management and user settings.
+    HOW: Returns the dashboard.html template.
+    """
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(locations.router)
+app.include_router(characters.router)
 
 if __name__ == "__main__":
     setproctitle("MatrixAPI")

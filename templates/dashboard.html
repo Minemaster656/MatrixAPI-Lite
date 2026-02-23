@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - MatrixAPI{% endblock %}
+
+{% block body_class %}relative{% endblock %}
+
+{% block body_start %}
+<canvas id="tsparticles" class="fixed top-0 left-0 w-full h-full z-0"></canvas>
+{% endblock %}
+
+{% block styles %}
+#tsparticles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+.character-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.character-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+.avatar-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pt-20 pb-8 px-4">
+    <div class="container mx-auto max-w-6xl">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Dashboard</h1>
+                <p class="text-gray-400 mt-1">Управление персонажами</p>
+            </div>
+            <button onclick="showCreateModal()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                <span>+</span> Создать персонажа
+            </button>
+        </div>
+        
+        <div id="characters-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        </div>
+        
+        <div id="no-characters" class="hidden text-center py-16">
+            <div class="text-6xl mb-4">🎭</div>
+            <h2 class="text-xl text-white mb-2">Персонажей пока нет</h2>
+            <p class="text-gray-400 mb-4">Создайте своего первого персонажа для игры</p>
+            <button onclick="showCreateModal()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                Создать персонажа
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="character-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+        <div class="flex justify-between items-center mb-4">
+            <h2 id="modal-title" class="text-xl font-bold text-white">Новый персонаж</h2>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        
+        <form id="character-form" class="space-y-4">
+            <input type="hidden" id="character-id">
+            
+            <div class="text-center mb-4">
+                <img id="avatar-preview" src="/static/assets/img/builtin_avatars/mtrx_avatar_default1.png" 
+                    class="avatar-preview mx-auto border-2 border-gray-600">
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 mb-2">Имя персонажа</label>
+                <input type="text" id="char-name" required maxlength="100"
+                    class="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                    placeholder="Имя персонажа">
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 mb-2">Описание</label>
+                <textarea id="char-description" rows="3" maxlength="2000"
+                    class="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                    placeholder="Описание персонажа (опционально)"></textarea>
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 mb-2">Аватар</label>
+                <div id="avatar-selector" class="flex gap-2 flex-wrap justify-center">
+                </div>
+            </div>
+            
+            <div id="modal-error" class="text-red-400 text-sm hidden"></div>
+            
+            <div class="flex gap-2">
+                <button type="button" onclick="closeModal()"
+                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                    Отмена
+                </button>
+                <button type="submit"
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                    Сохранить
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="delete-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl p-6 w-full max-w-sm border border-gray-700 text-center">
+        <h2 class="text-xl font-bold text-white mb-2">Удалить персонажа?</h2>
+        <p class="text-gray-400 mb-6">Это действие нельзя отменить.</p>
+        <input type="hidden" id="delete-char-id">
+        <div class="flex gap-2">
+            <button onclick="closeDeleteModal()"
+                class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                Отмена
+            </button>
+            <button onclick="confirmDelete()"
+                class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                Удалить
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BUILTIN_AVATARS = [
+    '/static/assets/img/builtin_avatars/mtrx_avatar_default1.png',
+    '/static/assets/img/builtin_avatars/mtrx_avatar_default2.png',
+    '/static/assets/img/builtin_avatars/mtrx_avatar_default3.png',
+    '/static/assets/img/builtin_avatars/mtrx_avatar_default4.png',
+];
+let selectedAvatar = BUILTIN_AVATARS[0];
+let editingId = null;
+
+function getToken() {
+    return localStorage.getItem('access_token');
+}
+
+function authFetch(url, options = {}) {
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login';
+        return Promise.reject('No token');
+    }
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = 'Bearer ' + token;
+    return fetch(url, options);
+}
+
+async function loadCharacters() {
+    const response = await authFetch('/api/characters/');
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login';
+        }
+        return;
+    }
+    const characters = await response.json();
+    renderCharacters(characters);
+}
+
+function renderCharacters(characters) {
+    const grid = document.getElementById('characters-grid');
+    const noChars = document.getElementById('no-characters');
+    
+    if (characters.length === 0) {
+        grid.innerHTML = '';
+        noChars.classList.remove('hidden');
+        return;
+    }
+    
+    noChars.classList.add('hidden');
+    grid.innerHTML = characters.map(char => `
+        <div class="character-card bg-gray-800/80 rounded-xl p-6 border border-gray-700">
+            <div class="flex items-start gap-4">
+                <img src="${char.avatar_url}" alt="${char.name}" class="avatar-preview">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-bold text-white truncate">${escapeHtml(char.name)}</h3>
+                    <p class="text-gray-400 text-sm mt-1 line-clamp-2">${escapeHtml(char.description) || 'Без описания'}</p>
+                </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="editCharacter(${char.id})"
+                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded-lg transition text-sm">
+                    Редактировать
+                </button>
+                <button onclick="playAs(${char.id}, '${escapeHtml(char.name)}')"
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg transition text-sm">
+                    Играть
+                </button>
+                <button onclick="showDeleteModal(${char.id})"
+                    class="bg-red-600/20 hover:bg-red-600/40 text-red-400 py-2 px-3 rounded-lg transition text-sm">
+                    ✕
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderAvatarSelector(selected) {
+    const container = document.getElementById('avatar-selector');
+    container.innerHTML = BUILTIN_AVATARS.map(avatar => `
+        <img src="${avatar}" 
+            class="w-12 h-12 rounded-full cursor-pointer border-2 ${avatar === selected ? 'border-blue-500' : 'border-gray-600'} hover:border-blue-400"
+            onclick="selectAvatar('${avatar}')">
+    `).join('');
+}
+
+function selectAvatar(avatar) {
+    selectedAvatar = avatar;
+    document.getElementById('avatar-preview').src = avatar;
+    renderAvatarSelector(avatar);
+}
+
+function showCreateModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Новый персонаж';
+    document.getElementById('character-id').value = '';
+    document.getElementById('char-name').value = '';
+    document.getElementById('char-description').value = '';
+    selectedAvatar = BUILTIN_AVATARS[0];
+    document.getElementById('avatar-preview').src = selectedAvatar;
+    renderAvatarSelector(selectedAvatar);
+    document.getElementById('modal-error').classList.add('hidden');
+    document.getElementById('character-modal').classList.remove('hidden');
+    document.getElementById('character-modal').classList.add('flex');
+}
+
+async function editCharacter(id) {
+    const response = await authFetch(`/api/characters/${id}`);
+    if (!response.ok) return;
+    const char = await response.json();
+    
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Редактировать';
+    document.getElementById('character-id').value = id;
+    document.getElementById('char-name').value = char.name;
+    document.getElementById('char-description').value = char.description;
+    selectedAvatar = char.avatar_url || BUILTIN_AVATARS[0];
+    document.getElementById('avatar-preview').src = selectedAvatar;
+    renderAvatarSelector(selectedAvatar);
+    document.getElementById('modal-error').classList.add('hidden');
+    document.getElementById('character-modal').classList.remove('hidden');
+    document.getElementById('character-modal').classList.add('flex');
+}
+
+function closeModal() {
+    document.getElementById('character-modal').classList.add('hidden');
+    document.getElementById('character-modal').classList.remove('flex');
+}
+
+function showDeleteModal(id) {
+    document.getElementById('delete-char-id').value = id;
+    document.getElementById('delete-modal').classList.remove('hidden');
+    document.getElementById('delete-modal').classList.add('flex');
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    document.getElementById('delete-modal').classList.remove('flex');
+}
+
+async function confirmDelete() {
+    const id = document.getElementById('delete-char-id').value;
+    const response = await authFetch(`/api/characters/${id}`, { method: 'DELETE' });
+    if (response.ok) {
+        closeDeleteModal();
+        loadCharacters();
+    }
+}
+
+function playAs(id, name) {
+    localStorage.setItem('selected_character_id', id);
+    localStorage.setItem('selected_character_name', name);
+    window.location.href = '/chat';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+document.getElementById('character-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('modal-error');
+    errorEl.classList.add('hidden');
+    
+    const name = document.getElementById('char-name').value;
+    const description = document.getElementById('char-description').value;
+    
+    const data = { name, description, avatar_url: selectedAvatar };
+    
+    let response;
+    if (editingId) {
+        response = await authFetch(`/api/characters/${editingId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    } else {
+        const createData = { name, description, avatar_url: selectedAvatar };
+        response = await authFetch('/api/characters/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(createData)
+        });
+    }
+    
+    if (response.ok) {
+        closeModal();
+        loadCharacters();
+    } else {
+        const err = await response.json();
+        errorEl.textContent = err.detail || 'Ошибка сохранения';
+        errorEl.classList.remove('hidden');
+    }
+});
+
+const token = getToken();
+if (!token) {
+    window.location.href = '/login';
+} else {
+    authFetch('/auth/me').then(r => {
+        if (!r.ok) {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login';
+        } else {
+            loadCharacters();
+        }
+    });
+}
+</script>
+{% include "components/particles.html" %}
+{% endblock %}

@@ -1,22 +1,20 @@
 """
-HTTP API endpoints for locations, characters and messages.
+HTTP API endpoints for locations and messages.
 
-WHY: Provides REST API for managing game entities and retrieving data.
+WHY: Provides REST API for managing locations and retrieving chat history.
 HOW: Uses FastAPI router with SQLModel for database operations.
 """
 
-from fastapi import APIRouter, HTTPException
 from typing import List
-from sqlmodel import select, Session
+
+from fastapi import APIRouter, HTTPException
+from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models.models import Location, Character
+from app.models.models import Location
 from app.schemas.schemas import (
     LocationCreate,
     LocationRead,
-    CharacterCreate,
-    CharacterRead,
-    MessageCreate,
     MessageRead,
 )
 from app.services.message_store import message_store
@@ -71,7 +69,7 @@ def get_locations() -> List[Location]:
         List[Location]: All locations in the database.
     """
     with Session(engine) as session:
-        return session.exec(select(Location)).all()
+        return list(session.exec(select(Location)).all())
 
 
 @router.get(
@@ -101,53 +99,6 @@ def get_location(location_id: int) -> Location:
         if not location:
             raise HTTPException(status_code=404, detail="Location not found")
         return location
-
-
-@router.post(
-    "/characters",
-    response_model=CharacterRead,
-    summary="Create a new character",
-    description="Creates a new character with name and optional description.",
-)
-def create_character(character: CharacterCreate) -> Character:
-    """
-    Create a new player character.
-
-    WHY: Players need to create characters for role-playing sessions.
-    HOW: Validates input and persists character to database.
-
-    Args:
-        character: CharacterCreate schema with character details.
-
-    Returns:
-        Character: The created character with assigned ID.
-    """
-    with Session(engine) as session:
-        db_character = Character.model_validate(character)
-        session.add(db_character)
-        session.commit()
-        session.refresh(db_character)
-        return db_character
-
-
-@router.get(
-    "/characters",
-    response_model=List[CharacterRead],
-    summary="Get all characters",
-    description="Returns a list of all registered characters.",
-)
-def get_characters() -> List[Character]:
-    """
-    Retrieve all characters.
-
-    WHY: Admin or debug endpoint to list all registered characters.
-    HOW: Simple SELECT query returning all character records.
-
-    Returns:
-        List[Character]: All characters in the database.
-    """
-    with Session(engine) as session:
-        return session.exec(select(Character)).all()
 
 
 @router.get(

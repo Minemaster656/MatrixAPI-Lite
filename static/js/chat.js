@@ -1,6 +1,89 @@
 let ws = null;
 let currentLocationId = null;
+let currentCharacterId = null;
 let currentCharacterName = null;
+let currentUsername = null;
+let selectedCharacterId = null;
+
+function getToken() {
+    return localStorage.getItem('access_token');
+}
+
+function authFetch(url, options = {}) {
+    const token = getToken();
+    if (!token) return Promise.reject('No token');
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = 'Bearer ' + token;
+    return fetch(url, options);
+}
+
+async function init() {
+    const token = getToken();
+    
+    if (!token) {
+        document.getElementById('auth-required').classList.remove('hidden');
+        return;
+    }
+    
+    const meResponse = await authFetch('/auth/me');
+    if (!meResponse.ok) {
+        localStorage.removeItem('access_token');
+        document.getElementById('auth-required').classList.remove('hidden');
+        return;
+    }
+    
+    const meData = await meResponse.json();
+    currentUsername = meData.username;
+    
+    const preselectedCharId = localStorage.getItem('selected_character_id');
+    const preselectedCharName = localStorage.getItem('selected_character_name');
+    
+    const charsResponse = await authFetch('/api/characters/');
+    if (!charsResponse.ok) {
+        document.getElementById('no-characters').classList.remove('hidden');
+        return;
+    }
+    
+    const characters = await charsResponse.json();
+    
+    if (characters.length === 0) {
+        document.getElementById('no-characters').classList.remove('hidden');
+        return;
+    }
+    
+    if (preselectedCharId && characters.find(c => c.id === parseInt(preselectedCharId))) {
+        selectedCharacterId = parseInt(preselectedCharId);
+        currentCharacterName = preselectedCharName;
+    }
+    
+    renderCharacterSelect(characters);
+    await loadLocations();
+    
+    document.getElementById('setup-panel').classList.remove('hidden');
+}
+
+function renderCharacterSelect(characters) {
+    const container = document.getElementById('character-select');
+    container.innerHTML = characters.map(char => `
+        <div class="character-option ${char.id === selectedCharacterId ? 'selected' : ''}" 
+             onclick="selectCharacter(${char.id}, '${escapeHtml(char.name)}')">
+            <img src="${char.avatar_url}" alt="${char.name}">
+            <div>
+                <div class="text-white font-medium">${escapeHtml(char.name)}</div>
+                <div class="text-gray-400 text-sm truncate">${escapeHtml(char.description) || 'Без описания'}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function selectCharacter(id, name) {
+    selectedCharacterId = id;
+    currentCharacterName = name;
+    document.querySelectorAll('.character-option').forEach(el => {
+        el.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+}
 
 async function loadLocations() {
     const response = await fetch('/api/locations');
@@ -15,16 +98,20 @@ async function loadLocations() {
 }
 
 function joinChat() {
-    const characterName = document.getElementById('character-name').value.trim();
     const locationId = parseInt(document.getElementById('location-select').value);
-    const locationName = document.getElementById('location-select').options[document.getElementById('location-select').selectedIndex].text;
     
-    if (!characterName || !locationId) {
-        alert('Введите имя персонажа и выберите локацию');
+    if (!selectedCharacterId) {
+        alert('Выберите персонажа');
+        return;
+    }
+    
+    if (!locationId) {
+        alert('Выберите локацию');
         return;
     }
 
     currentLocationId = locationId;
+    currentCharacterId = selectedCharacterId;
     ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
 
     ws.onopen = async () => {
@@ -38,18 +125,17 @@ function joinChat() {
         
         document.getElementById('location-name').textContent = locationData.name;
         
-        ws.send(JSON.stringify({ type: 'set_character', character_name: characterName }));
+        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
         ws.send(JSON.stringify({ type: 'set_location', location_id: locationId }));
         
         const locationsResponse = await fetch('/api/locations');
         const locations = await locationsResponse.json();
         renderLocationsList(locations, locationId);
         
-        currentCharacterName = characterName;
+        await populateCharacterDropdown();
         
         document.getElementById('setup-panel').classList.add('hidden');
         document.getElementById('chat-panel').classList.remove('hidden');
-        document.getElementById('character-name-display').value = characterName;
     };
 
     ws.onmessage = (event) => {
@@ -57,6 +143,8 @@ function joinChat() {
         
         if (data.type === 'message') {
             addMessage(data);
+        } else if (data.type === 'private_message') {
+            addMessage(data, true);
         } else if (data.type === 'location_set') {
             document.getElementById('messages').innerHTML = '';
             currentLocationId = data.location_id;
@@ -86,6 +174,22 @@ function joinChat() {
     };
 }
 
+async function populateCharacterDropdown() {
+    const response = await authFetch('/api/characters/');
+    const characters = await response.json();
+    const select = document.getElementById('character-select');
+    select.innerHTML = characters.map(char => 
+        `<option value="${char.id}" data-name="${escapeHtml(char.name)}" ${char.id === currentCharacterId ? 'selected' : ''}>${escapeHtml(char.name)}</option>`
+    ).join('');
+    
+    select.onchange = () => {
+        const selected = select.options[select.selectedIndex];
+        currentCharacterId = parseInt(selected.value);
+        currentCharacterName = selected.dataset.name;
+        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+    };
+}
+
 function leaveChat() {
     if (ws) {
         ws.close();
@@ -96,7 +200,6 @@ function leaveChat() {
     document.getElementById('online-users').innerHTML = '';
     document.getElementById('locations-list-mobile').innerHTML = '';
     document.getElementById('online-users-mobile').innerHTML = '';
-    currentCharacterName = null;
 }
 
 function toggleSidebar(panel) {
@@ -160,16 +263,68 @@ function renderOnlineUsers(users) {
             list.innerHTML = '<div class="text-gray-500 text-sm px-2">Нет онлайн</div>';
             return;
         }
+        
+        const groupedByUser = {};
         users.forEach(user => {
+            const userKey = user.username;
+            if (!groupedByUser[userKey]) {
+                groupedByUser[userKey] = {
+                    username: user.username,
+                    characters: []
+                };
+            }
+            groupedByUser[userKey].characters.push(user);
+        });
+        
+        Object.values(groupedByUser).forEach(userGroup => {
+            const isMe = userGroup.characters.some(c => c.character_name === currentCharacterName);
             const div = document.createElement('div');
-            const isMe = user.character_name === currentCharacterName;
-            div.className = `p-2 rounded text-sm flex items-center gap-2 ${isMe ? 'bg-blue-900 text-blue-200' : 'text-gray-300 hover:bg-gray-700'}`;
-            div.innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span><span class="truncate">${escapeHtml(user.character_name || user.username)}${isMe ? ' (вы)' : ''}</span>`;
+            div.className = `mb-2 ${isMe ? 'bg-blue-900/30 rounded-lg p-2' : ''}`;
+            
+            const charDivs = userGroup.characters.map(char => {
+                const charIsMe = char.character_name === currentCharacterName;
+                const avatarUrl = char.avatar_url || '/static/assets/img/builtin_avatars/mtrx_avatar_default1.png';
+                return `
+                    <div class="flex items-center gap-2 py-1 ${charIsMe ? 'text-blue-300' : 'text-gray-300'}">
+                        <img src="${avatarUrl}" class="w-5 h-5 rounded-full object-cover">
+                        <span class="truncate text-sm">${escapeHtml(char.character_name || char.username)}</span>
+                        ${charIsMe ? '<span class="text-xs text-blue-400">(вы)</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            div.innerHTML = `
+                <div class="text-xs text-gray-500 px-2 mb-1">${escapeHtml(userGroup.username)}${isMe ? ' <span class="text-blue-400">(вы)</span>' : ''}</div>
+                ${charDivs}
+            `;
             list.appendChild(div);
         });
+        
+        updateMessageTargetDropdown(users);
     };
     renderTo('online-users');
     renderTo('online-users-mobile', true);
+}
+
+function updateMessageTargetDropdown(users) {
+    const targetSelect = document.getElementById('message-target');
+    if (!targetSelect) return;
+    
+    const currentValue = targetSelect.value;
+    targetSelect.innerHTML = '<option value="">Всем</option>';
+    
+    users.forEach(user => {
+        if (user.username !== 'Anonymous' && user.character_name !== currentCharacterName) {
+            const option = document.createElement('option');
+            option.value = user.username;
+            option.textContent = `${user.character_name || user.username} (${user.username})`;
+            targetSelect.appendChild(option);
+        }
+    });
+    
+    if (currentValue) {
+        targetSelect.value = currentValue;
+    }
 }
 
 function clearBackground() {
@@ -180,18 +335,22 @@ function clearBackground() {
     document.body.style.background = '';
 }
 
-function addMessage(data) {
+function addMessage(data, isPrivate = false) {
     const messagesDiv = document.getElementById('messages');
     const div = document.createElement('div');
-    div.className = 'message';
+    div.className = 'message' + (isPrivate ? ' private-message' : '');
     
     const time = new Date(data.created_at).toLocaleTimeString();
     const renderedText = marked.parse(data.text);
+    const avatarUrl = data.avatar_url || '/static/assets/img/builtin_avatars/mtrx_avatar_default1.png';
     
     div.innerHTML = `
-        <div class="author">${escapeHtml(data.character_name)}</div>
-        <div class="content">${renderedText}</div>
-        <div class="time">${time}</div>
+        <img src="${avatarUrl}" alt="${escapeHtml(data.character_name)}" class="message-avatar">
+        <div class="message-content">
+            <div class="author">${escapeHtml(data.character_name)}${isPrivate ? ' <span class="text-purple-400">(личное)</span>' : ''}</div>
+            <div class="content">${renderedText}</div>
+            <div class="time">${time}</div>
+        </div>
     `;
     messagesDiv.appendChild(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -200,9 +359,15 @@ function addMessage(data) {
 function sendMessage() {
     const messageInput = document.getElementById('message');
     const text = messageInput.value.trim();
+    const targetSelect = document.getElementById('message-target');
+    const targetUsername = targetSelect.value;
     
     if (text && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'message', text: text }));
+        if (targetUsername) {
+            ws.send(JSON.stringify({ type: 'private_message', text: text, target_username: targetUsername }));
+        } else {
+            ws.send(JSON.stringify({ type: 'message', text: text }));
+        }
         messageInput.value = '';
     }
 }
@@ -220,4 +385,4 @@ document.getElementById('message')?.addEventListener('keypress', (e) => {
     }
 });
 
-loadLocations();
+init();

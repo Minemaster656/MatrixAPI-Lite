@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}RP Chat - Игра{% endblock %}
+{% block title %}Чат - MatrixAPI{% endblock %}
 
-{% block body_class %}relative{% endblock %}
+{% block body_class %}relative flex flex-col{% endblock %}
 
 {% block body_start %}
 <canvas id="tsparticles" class="fixed top-0 left-0 w-full h-full z-0"></canvas>
@@ -20,12 +20,28 @@
 #chat-container {
     position: relative;
     z-index: 1;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 #messages .message {
     background: rgba(255, 255, 255, 0.1);
     padding: 12px;
     border-radius: 8px;
     margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+}
+#messages .message .message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+#messages .message .message-content {
+    flex: 1;
+    min-width: 0;
 }
 #messages .message .author {
     font-weight: bold;
@@ -38,16 +54,84 @@
     font-size: 0.75rem;
     color: #9ca3af;
 }
+#messages .message.private-message {
+    background: rgba(139, 92, 246, 0.15);
+    border-left: 3px solid #8b5cf6;
+}
 select option {
     background: #1f2937;
+}
+.character-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+}
+.character-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.character-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.character-option.selected {
+    background: rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+.character-option img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
 }
 {% endblock %}
 
 {% block content %}
 <div id="chat-container" class="container mx-auto px-4 py-8 pt-20">
-    <h1 class="text-3xl font-bold text-white mb-6 text-center">RP Chat</h1>
+    <h1 class="text-3xl font-bold text-white mb-6 text-center">MatrixAPI</h1>
     
-    {% include "chat/setup-panel.html" %}
+    <div id="auth-required" class="hidden bg-gray-800/80 rounded-xl p-8 max-w-md mx-auto text-center">
+        <div class="text-6xl mb-4">🔐</div>
+        <h2 class="text-xl text-white mb-2">Требуется авторизация</h2>
+        <p class="text-gray-400 mb-4">Войдите или зарегистрируйтесь для игры</p>
+        <div class="flex gap-2 justify-center">
+            <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition">Войти</a>
+            <a href="/register" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition">Регистрация</a>
+        </div>
+    </div>
+    
+    <div id="no-characters" class="hidden bg-gray-800/80 rounded-xl p-8 max-w-md mx-auto text-center">
+        <div class="text-6xl mb-4">🎭</div>
+        <h2 class="text-xl text-white mb-2">Нет персонажей</h2>
+        <p class="text-gray-400 mb-4">Создайте персонажа для игры</p>
+        <a href="/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition inline-block">Создать персонажа</a>
+    </div>
+    
+    <div id="setup-panel" class="hidden bg-gray-800 bg-opacity-80 rounded-xl p-6 mb-6 max-w-4xl mx-auto">
+        <h2 class="text-xl text-white mb-4">Выбор персонажа и локации</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label class="block text-gray-300 mb-2">Персонаж</label>
+                <div id="character-select" class="character-select max-h-64 overflow-y-auto">
+                </div>
+            </div>
+            <div>
+                <label class="block text-gray-300 mb-2">Локация</label>
+                <select id="location-select" class="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white">
+                    <option value="">Выберите локацию...</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="joinChat()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+            Войти в игру
+        </button>
+    </div>
+    
     {% include "chat/chat-panel.html" %}
     {% include "chat/mobile-panels.html" %}
 </div>
@@ -56,5 +140,8 @@ select option {
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 {% include "components/particles.html" %}
+<script>
+document.querySelector('footer').style.display = 'none';
+</script>
 <script src="/static/js/chat.js"></script>
 {% endblock %}

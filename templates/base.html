@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}RP Chat{% endblock %}</title>
+    <title>{% block title %}MatrixAPI{% endblock %}</title>
+    <link rel="icon" href="/static/assets/img/logo_128.png" type="image/png">
     <script src="https://cdn.tailwindcss.com"></script>
     {% block head %}{% endblock %}
     <style>
         {% block styles %}{% endblock %}
     </style>
 </head>
-<body class="bg-gray-900 min-h-screen {% block body_class %}{% endblock %}">
+<body class="bg-gray-900 min-h-screen flex flex-col {% block body_class %}{% endblock %}">
     {% block body_start %}{% endblock %}
     
     {% include "components/header.html" %}
     
-    <main>
+    <main class="flex-1">
         {% block content %}{% endblock %}
     </main>
     

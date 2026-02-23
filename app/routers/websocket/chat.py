@@ -8,12 +8,13 @@ HOW: Uses FastAPI WebSocket with custom message protocol for:
      - Broadcasting messages to location participants
 """
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import select, Session
 
 from app.core.websocket_manager import manager
 from app.core.db import engine
-from app.models.models import Location
+from app.models.models import Character, Location
 from app.services.message_store import message_store
 from app.schemas.schemas import MessageCreate
 
@@ -60,6 +61,8 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
             if msg_type == "message":
                 await _handle_message(websocket, data)
+            elif msg_type == "private_message":
+                await _handle_private_message(websocket, data)
             elif msg_type == "set_character":
                 await _handle_set_character(websocket, data)
             elif msg_type == "set_location":
@@ -80,8 +83,10 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
         websocket: The sender's WebSocket connection.
         data: Message data with 'text' field.
     """
-    character_name = manager.get_username(websocket)
-    location_id = manager.get_info(websocket).location_id
+    info = manager.get_info(websocket)
+    character_name = info.character_name or info.username or "Anonymous"
+    avatar_url = info.avatar_url
+    location_id = info.location_id
 
     if not location_id:
         await websocket.send_json({"type": "error", "message": "No location selected"})
@@ -102,10 +107,51 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
             "id": msg.id,
             "text": msg.text,
             "character_name": msg.character_name,
+            "avatar_url": avatar_url,
             "created_at": msg.created_at.isoformat(),
         },
         location_id,
     )
+
+
+async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
+    """
+    Handle incoming private/direct message.
+
+    WHY: Allows users to send private messages to each other.
+    HOW: Finds target WebSocket by username, sends only to that user.
+
+    Args:
+        websocket: The sender's WebSocket connection.
+        data: Message data with 'text' and 'target_username' fields.
+    """
+    info = manager.get_info(websocket)
+    sender_name = info.character_name or info.username or "Anonymous"
+    sender_avatar = info.avatar_url
+    target_username = data.get("target_username")
+    text = data.get("text", "")
+
+    if not target_username or not text:
+        return
+
+    target_websocket = manager.find_connection_by_username(target_username)
+    if not target_websocket:
+        await websocket.send_json(
+            {"type": "error", "message": "User not found or offline"}
+        )
+        return
+
+    message_payload = {
+        "type": "private_message",
+        "id": message_store.generate_id(),
+        "text": text,
+        "character_name": sender_name,
+        "avatar_url": sender_avatar,
+        "created_at": datetime.now().isoformat(),
+    }
+
+    await manager.send_personal(message_payload, websocket)
+    await manager.send_personal(message_payload, target_websocket)
 
 
 async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
@@ -119,10 +165,25 @@ async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
         websocket: The WebSocket connection.
         data: Data with 'character_name' field.
     """
+    character_id = data.get("character_id")
     character_name = data.get("character_name", "")
-    manager.set_character(websocket, character_name)
+    username = data.get("username", "Anonymous")
+    avatar_url = None
+
+    if character_id:
+        with Session(engine) as session:
+            character = session.get(Character, character_id)
+            if character:
+                avatar_url = character.avatar_url
+
+    manager.set_username(websocket, username)
+    manager.set_character(websocket, character_name, avatar_url, character_id)
     await websocket.send_json(
-        {"type": "character_set", "character_name": character_name}
+        {
+            "type": "character_set",
+            "character_name": character_name,
+            "avatar_url": avatar_url,
+        }
     )
 
 

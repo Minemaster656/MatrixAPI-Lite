@@ -8,6 +8,10 @@ class MessageStore:
         self._messages: Dict[int, List[MessageRead]] = {}
         self._message_id = 0
 
+    def generate_id(self) -> int:
+        self._message_id += 1
+        return self._message_id
+
     def add_message(self, message: MessageCreate) -> MessageRead:
         self._message_id += 1
         msg = MessageRead(
