@@ -17,6 +17,8 @@ class MessageStore:
         message: MessageCreate,
         character_name: str,
         sender_username: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        ooc_as_user: bool = False,
     ) -> MessageRead:
         self._message_id += 1
         msg = MessageRead(
@@ -24,8 +26,10 @@ class MessageStore:
             text=message.text,
             character_name=character_name,
             sender_username=sender_username,
+            avatar_url=avatar_url,
             location_id=message.location_id,
             is_ooc=message.is_ooc,
+            ooc_as_user=ooc_as_user,
             created_at=datetime.now(UTC),
         )
         if message.location_id not in self._messages:

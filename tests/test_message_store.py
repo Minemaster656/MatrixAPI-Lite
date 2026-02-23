@@ -33,9 +33,12 @@ class TestMessageStore:
             text="Hello world",
             location_id=1,
         )
-        result = store.add_message(msg_data, character_name="Hero")
+        result = store.add_message(
+            msg_data, character_name="Hero", avatar_url="/avatar.png"
+        )
         assert result.text == "Hello world"
         assert result.character_name == "Hero"
+        assert result.avatar_url == "/avatar.png"
         assert result.location_id == 1
         assert result.id is not None
 
@@ -69,6 +72,7 @@ class TestMessageStore:
                     location_id=1,
                 ),
                 character_name="Hero",
+                avatar_url="/avatar.png",
             )
 
         messages = store.get_messages(1)
@@ -83,6 +87,7 @@ class TestMessageStore:
                     location_id=1,
                 ),
                 character_name="Hero",
+                avatar_url="/avatar.png",
             )
 
         messages = store.get_messages(1, limit=10)

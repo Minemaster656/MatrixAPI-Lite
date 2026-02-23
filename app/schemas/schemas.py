@@ -157,6 +157,8 @@ class MessageRead(BaseModel):
     text: str
     character_name: str
     sender_username: Optional[str] = None
+    avatar_url: Optional[str] = None
     location_id: int
     is_ooc: bool = Field(default=False)
+    ooc_as_user: bool = Field(default=False)
     created_at: datetime

@@ -87,14 +87,16 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
     """
     info = manager.get_info(websocket)
     is_ooc = info.is_ooc
+    ooc_as_user = is_ooc and info.ooc_username is not None
 
-    if is_ooc:
-        character_name = info.ooc_username or info.username or "Anonymous"
+    if is_ooc and info.ooc_username:
+        character_name = info.ooc_username
+        avatar_url = None
     else:
         character_name = info.character_name or info.username or "Anonymous"
+        avatar_url = info.avatar_url
 
     sender_username = info.username
-    avatar_url = info.avatar_url
     location_id = info.location_id
 
     if not location_id:
@@ -106,7 +108,10 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
         return
 
     message = MessageCreate(text=text, location_id=location_id, is_ooc=is_ooc)
-    msg = message_store.add_message(message, character_name, sender_username)
+    msg = message_store.add_message(
+        message, character_name, sender_username, avatar_url, ooc_as_user
+    )
+    manager.decrement_fading_messages(location_id)
 
     await manager.broadcast(
         {
@@ -117,6 +122,7 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
             "sender_username": msg.sender_username,
             "avatar_url": avatar_url,
             "is_ooc": msg.is_ooc,
+            "ooc_as_user": msg.ooc_as_user,
             "created_at": msg.created_at.isoformat(),
         },
         location_id,
@@ -137,6 +143,7 @@ async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
     info = manager.get_info(websocket)
     sender_name = info.character_name or info.username or "Anonymous"
     sender_avatar = info.avatar_url
+    is_ooc = info.is_ooc
     target_username = data.get("target_username")
     text = data.get("text", "")
 
@@ -155,7 +162,9 @@ async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
         "id": message_store.generate_id(),
         "text": text,
         "character_name": sender_name,
+        "sender_username": info.username,
         "avatar_url": sender_avatar,
+        "is_ooc": is_ooc,
         "created_at": datetime.now().isoformat(),
     }
 
@@ -212,10 +221,22 @@ async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
 
     manager.set_username(websocket, username)
     manager.set_character(websocket, character_name, avatar_url, character_id)
+
+    info = manager.get_info(websocket)
+    if info.location_id:
+        await manager.broadcast(
+            {
+                "type": "online_users",
+                "users": manager.get_users_on_location(info.location_id),
+            },
+            info.location_id,
+        )
+
     await websocket.send_json(
         {
             "type": "character_set",
             "character_name": character_name,
+            "character_id": character_id,
             "avatar_url": avatar_url,
         }
     )
@@ -261,7 +282,9 @@ async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
                     "text": m.text,
                     "character_name": m.character_name,
                     "sender_username": m.sender_username,
+                    "avatar_url": m.avatar_url,
                     "is_ooc": m.is_ooc,
+                    "ooc_as_user": m.ooc_as_user,
                     "created_at": m.created_at.isoformat(),
                 }
                 for m in messages
@@ -302,19 +325,22 @@ async def _handle_set_ooc(websocket: WebSocket, data: dict) -> None:
 
     WHY: Allows users to switch between character and user identity.
     HOW: Updates is_ooc flag in connection info.
+         If as_user is True, messages will be sent as the user (username).
+         If as_user is False, messages will be sent as character but with [OOC] tag.
 
     Args:
         websocket: The WebSocket connection.
-        data: Data with 'is_ooc' boolean field.
+        data: Data with 'is_ooc' boolean field and optional 'as_user' boolean.
     """
     is_ooc = data.get("is_ooc", False)
-    ooc_username = data.get("ooc_username")
+    as_user = data.get("as_user", False)
+    info = manager.get_info(websocket)
+    if as_user:
+        manager.set_ooc_username(websocket, info.username)
+    else:
+        manager.set_ooc_username(websocket, None)
     manager.set_ooc(websocket, is_ooc)
-    if ooc_username:
-        manager.set_ooc_username(websocket, ooc_username)
-    await websocket.send_json(
-        {"type": "ooc_set", "is_ooc": is_ooc, "ooc_username": ooc_username}
-    )
+    await websocket.send_json({"type": "ooc_set", "is_ooc": is_ooc, "as_user": as_user})
 
 
 async def _handle_disconnect(websocket: WebSocket) -> None:
