@@ -10,8 +10,8 @@ from app.routers import auth
 from app.routers.http import locations
 from app.routers.websocket import chat
 from app.core.db import engine
-from app.models.models import Location, Character
-from app.models.models import SQLModel
+from app.models.models import Location
+from setproctitle import setproctitle
 
 
 def seed_locations():
@@ -63,3 +63,9 @@ def read_root(request: Request):
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(locations.router)
+
+if __name__ == "__main__":
+    setproctitle("MatrixAPI")
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=33217)

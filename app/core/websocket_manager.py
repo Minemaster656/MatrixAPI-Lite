@@ -62,5 +62,17 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections[websocket].character_name = character_name
 
+    def get_users_on_location(self, location_id: int) -> list[dict]:
+        users = []
+        for connection, info in self.active_connections.items():
+            if info.location_id == location_id:
+                users.append(
+                    {
+                        "username": info.username,
+                        "character_name": info.character_name,
+                    }
+                )
+        return users
+
 
 manager = ConnectionManager()
