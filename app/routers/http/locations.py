@@ -5,19 +5,20 @@ WHY: Provides REST API for managing locations and retrieving chat history.
 HOW: Uses FastAPI router with SQLModel for database operations.
 """
 
-from typing import List
+from typing import Annotated, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models.models import Location
+from app.models.models import Location, User
 from app.schemas.schemas import (
     LocationCreate,
     LocationRead,
     MessageRead,
 )
 from app.services.message_store import message_store
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -28,24 +29,31 @@ router = APIRouter(prefix="/api", tags=["api"])
     summary="Create a new location",
     description="Creates a new game location with name, description and optional background URL.",
 )
-def create_location(location: LocationCreate) -> Location:
+def create_location(
+    location: LocationCreate,
+    user: Annotated[User, Depends(get_current_user)],
+) -> Location:
     """
     Create a new location in the game world.
 
     WHY: Allows administrators or game masters to add new playable areas.
     HOW: Validates input via Pydantic, persists to database via SQLModel.
+          Requires authentication via JWT.
 
     Args:
         location: LocationCreate schema with name, description and background_url.
+        user: The authenticated user from JWT (injected by Depends).
 
     Returns:
         Location: The created location with assigned ID.
 
     Raises:
+        HTTPException: 401 if not authenticated.
         ValidationError: If input data is invalid.
     """
     with Session(engine) as session:
         db_location = Location.model_validate(location)
+        db_location.creator_id = user.id
         session.add(db_location)
         session.commit()
         session.refresh(db_location)

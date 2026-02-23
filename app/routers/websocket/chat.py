@@ -160,21 +160,46 @@ async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
 
     WHY: Associates the WebSocket connection with a character name.
     HOW: Updates connection metadata in the connection manager.
+          Validates that character belongs to the authenticated user.
 
     Args:
         websocket: The WebSocket connection.
-        data: Data with 'character_name' field.
+        data: Data with 'character_id', 'character_name', and optional 'token' fields.
     """
     character_id = data.get("character_id")
     character_name = data.get("character_name", "")
     username = data.get("username", "Anonymous")
+    token = data.get("token")
     avatar_url = None
+    user_id = None
 
-    if character_id:
+    if token:
+        from app.core.auth import decode_access_token
+
+        payload = decode_access_token(token)
+        if payload:
+            sub = payload.get("sub")
+            if sub is not None:
+                user_id = int(sub)
+
+    if character_id and user_id is not None:
+        try:
+            char_id_int = int(character_id)
+        except (TypeError, ValueError):
+            await websocket.send_json(
+                {"type": "error", "message": "Invalid character_id"}
+            )
+            return
         with Session(engine) as session:
-            character = session.get(Character, character_id)
-            if character:
+            character = session.get(Character, char_id_int)
+            if character and character.owner_id == user_id:
                 avatar_url = character.avatar_url
+                character_name = character.name
+            elif character:
+                await websocket.send_json(
+                    {"type": "error", "message": "Character does not belong to you"}
+                )
+                return
 
     manager.set_username(websocket, username)
     manager.set_character(websocket, character_name, avatar_url, character_id)
@@ -199,6 +224,12 @@ async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
         data: Data with 'location_id' field.
     """
     location_id = data.get("location_id")
+    if location_id is None:
+        await websocket.send_json(
+            {"type": "error", "message": "location_id is required"}
+        )
+        return
+
     old_location_id = manager.get_info(websocket).location_id
     manager.set_location(websocket, location_id)
     messages = message_store.get_messages(location_id)
