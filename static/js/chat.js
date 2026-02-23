@@ -64,7 +64,8 @@ async function init() {
 }
 
 function renderCharacterSelect(characters) {
-    const container = document.getElementById('character-select');
+    const container = document.getElementById('character-setup-select');
+    if (!container) return;
     container.innerHTML = characters.map(char => `
         <div class="character-option ${char.id === selectedCharacterId ? 'selected' : ''}" 
              onclick="selectCharacter(${char.id}, '${escapeHtml(char.name)}')">
@@ -170,14 +171,17 @@ function joinChat() {
             if (checkbox) checkbox.checked = isOocMode;
             const label = document.getElementById('ooc-label');
             const charSelect = document.getElementById('character-select');
+            const oocUserSelect = document.getElementById('ooc-user-select');
             if (isOocMode) {
                 if (label) label.classList.remove('hidden');
+                if (oocUserSelect) oocUserSelect.classList.remove('hidden');
                 if (charSelect) {
                     charSelect.disabled = true;
                     charSelect.classList.add('opacity-50');
                 }
             } else {
                 if (label) label.classList.add('hidden');
+                if (oocUserSelect) oocUserSelect.classList.add('hidden');
                 if (charSelect) {
                     charSelect.disabled = false;
                     charSelect.classList.remove('opacity-50');
@@ -228,13 +232,18 @@ function toggleOocMode() {
     } else {
         label.classList.add('hidden');
         oocUserSelect.classList.add('hidden');
+        oocUserSelect.value = '';
         charSelect.disabled = false;
         charSelect.classList.remove('opacity-50');
         const selected = charSelect.options[charSelect.selectedIndex];
-        currentCharacterId = parseInt(selected.value);
-        currentCharacterName = selected.dataset.name;
-        ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: false }));
-        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+        if (selected && selected.value) {
+            currentCharacterId = parseInt(selected.value);
+            currentCharacterName = selected.dataset.name;
+            ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: false }));
+            ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+        } else {
+            ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: false }));
+        }
     }
 }
 

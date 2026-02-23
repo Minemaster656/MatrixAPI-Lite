@@ -260,6 +260,8 @@ async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
                     "id": m.id,
                     "text": m.text,
                     "character_name": m.character_name,
+                    "sender_username": m.sender_username,
+                    "is_ooc": m.is_ooc,
                     "created_at": m.created_at.isoformat(),
                 }
                 for m in messages
