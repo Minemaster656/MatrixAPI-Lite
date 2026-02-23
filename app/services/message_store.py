@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List
 from app.schemas.schemas import MessageCreate, MessageRead
 
@@ -19,7 +19,7 @@ class MessageStore:
             text=message.text,
             character_name=message.character_name,
             location_id=message.location_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         if message.location_id not in self._messages:
             self._messages[message.location_id] = []

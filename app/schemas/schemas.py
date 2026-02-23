@@ -8,7 +8,7 @@ HOW: Uses Pydantic v2 with from_attributes for ORM compatibility.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # User schemas
@@ -37,15 +37,15 @@ class UserLogin(BaseModel):
 class UserRead(BaseModel):
     """Schema for user data in responses."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     email: str
     avatar_url: Optional[str]
     is_active: bool
+    is_admin: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class UserUpdate(BaseModel):
@@ -96,14 +96,13 @@ class CharacterUpdate(BaseModel):
 class CharacterRead(CharacterBase):
     """Schema for character data in responses."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     owner_id: int
     avatar_url: Optional[str]
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Location schemas
@@ -126,11 +125,11 @@ class LocationCreate(LocationBase):
 class LocationRead(LocationBase):
     """Schema for location data in responses."""
 
-    id: int
-    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    id: int
+    creator_id: Optional[int]
+    created_at: datetime
 
 
 # Message schemas
@@ -138,6 +137,8 @@ class LocationRead(LocationBase):
 
 class MessageCreate(BaseModel):
     """Schema for creating a chat message."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     text: str = Field(..., min_length=1, max_length=5000)
     character_name: str
@@ -147,11 +148,10 @@ class MessageCreate(BaseModel):
 class MessageRead(BaseModel):
     """Schema for message data in responses."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     text: str
     character_name: str
     location_id: int
     created_at: datetime
-
-    class Config:
-        from_attributes = True

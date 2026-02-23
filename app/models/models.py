@@ -5,10 +5,10 @@ WHY: Defines the schema for all persistent data entities.
 HOW: Uses SQLModel for ORM with Pydantic validation support.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Field, Index
 
 
 class User(SQLModel, table=True):
@@ -20,15 +20,20 @@ class User(SQLModel, table=True):
     """
 
     __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_username", "username", unique=True),
+        Index("ix_users_email", "email", unique=True),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    username: str = Field(unique=True, index=True, max_length=50)
-    email: str = Field(unique=True, index=True, max_length=255)
+    username: str = Field(max_length=50)
+    email: str = Field(max_length=255)
     hashed_password: str
     avatar_url: Optional[str] = Field(default=None, max_length=500)
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    is_admin: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Character(SQLModel, table=True):
@@ -40,14 +45,18 @@ class Character(SQLModel, table=True):
     """
 
     __tablename__ = "characters"
+    __table_args__ = (
+        Index("ix_characters_name", "name"),
+        Index("ix_characters_owner_id", "owner_id"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True, max_length=100)
+    name: str = Field(max_length=100)
     description: str = Field(default="", max_length=2000)
-    owner_id: int = Field(foreign_key="users.id", index=True)
+    owner_id: int = Field(foreign_key="users.id")
     avatar_url: Optional[str] = Field(default=None, max_length=500)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Location(SQLModel, table=True):
@@ -59,9 +68,11 @@ class Location(SQLModel, table=True):
     """
 
     __tablename__ = "locations"
+    __table_args__ = (Index("ix_locations_name", "name"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True, max_length=100)
+    name: str = Field(max_length=100)
     description: str = Field(default="", max_length=2000)
     background_url: Optional[str] = Field(default=None, max_length=500)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    creator_id: Optional[int] = Field(default=None, foreign_key="users.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

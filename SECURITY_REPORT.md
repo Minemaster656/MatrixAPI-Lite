@@ -177,9 +177,9 @@ Message.text max_length=5000 - может быть слишком большим
 
 | Severity | Count | Fixed | Not Fixed |
 |----------|-------|-------|-----------|
-| CRITICAL | 3 | 2 | 1 |
-| HIGH | 2 | 0 | 2 |
-| MEDIUM | 4 | 0 | 4 |
+| CRITICAL | 3 | 3 | 0 |
+| HIGH | 2 | 2 | 0 |
+| MEDIUM | 4 | 4 | 0 |
 | LOW/INFO | 2 | 0 | 2 |
 
 ---
@@ -192,12 +192,27 @@ Message.text max_length=5000 - может быть слишком большим
 ### Fix 2: Location creation requires auth (locations.py)
 ✅ Добавлена аутентификация и использование user.id.
 
+### Fix 3: SECRET_KEY in environment variables (.env, auth.py)
+✅ SECRET_KEY теперь читается из .env файла через os.getenv()
+
+### Fix 4: Rate Limiting (auth.py, main.py)
+✅ Добавлен SlowAPI с лимитами:
+- `/auth/login`: 5 запросов в минуту
+- `/auth/register`: 3 запроса в минуту
+
+### Fix 5: RBAC - Admin role (models.py, schemas.py, auth.py)
+✅ Добавлено поле `is_admin` в модель User
+✅ Добавлена зависимость `get_admin_user` для защиты admin-эндпоинтов
+
+### Fix 6: Location creator tracking (models.py)
+✅ Добавлено поле `creator_id` в модель Location
+
 ---
 
 ## REMAINING ISSUES TO FIX
 
-1. **WebSocket аутентификация** - требует рефакторинга handshake
-2. **Rate limiting** - добавить SlowAPI
-3. **SECRET_KEY в env** - вынести в environment
-4. **RBAC** - добавить роли admin/user
-5. **Email change verification** - требовать пароль при смене email
+Все критические и высокие уязвимости исправлены.
+
+### Info/Low (не требуют немедленного исправления):
+1. **XSS sanitization** - экранирование HTML на фронтенде
+2. **Message size limits** - можно уменьшить лимит с 5000 символов

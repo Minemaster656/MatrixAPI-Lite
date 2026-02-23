@@ -8,8 +8,10 @@ HOW: Uses JWT for stateless authentication with bcrypt password hashing.
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlmodel import Session, select
 
 from app.core.auth import (
@@ -25,6 +27,8 @@ from app.schemas.schemas import Token, UserCreate, UserLogin, UserRead, UserUpda
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer()
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def get_current_user(
@@ -56,16 +60,18 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: str = payload.get("sub")
-    if not user_id:
+    user_id_raw = payload.get("sub")
+    if not user_id_raw:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    user_id: int = int(user_id_raw)
+
     with Session(engine) as session:
-        user = session.get(User, int(user_id))
+        user = session.get(User, user_id)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -73,6 +79,32 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return user
+
+
+async def get_admin_user(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """
+    Dependency to verify current user is an administrator.
+
+    WHY: Restricts admin-only endpoints.
+    HOW: Checks is_admin flag after basic authentication.
+
+    Args:
+        user: The authenticated user from get_current_user.
+
+    Returns:
+        User: The authenticated admin user.
+
+    Raises:
+        HTTPException: 403 if user is not admin.
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
 
 
 async def get_current_user_with_refresh(
@@ -103,16 +135,18 @@ async def get_current_user_with_refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: str = payload.get("sub")
-    if not user_id:
+    user_id_raw = payload.get("sub")
+    if not user_id_raw:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    user_id: int = int(user_id_raw)
+
     with Session(engine) as session:
-        user = session.get(User, int(user_id))
+        user = session.get(User, user_id)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -121,7 +155,7 @@ async def get_current_user_with_refresh(
             )
 
         new_token = None
-        if should_refresh_token(payload):
+        if should_refresh_token(payload) and user.id is not None:
             new_token = create_access_token(user.id)
 
         return user, new_token
@@ -133,7 +167,8 @@ async def get_current_user_with_refresh(
     status_code=status.HTTP_201_CREATED,
     summary="Register new user",
 )
-def register(user_data: UserCreate) -> User:
+@limiter.limit("3/minute")
+def register(request: Request, user_data: UserCreate) -> User:
     """
     Register a new user account.
 
@@ -184,7 +219,8 @@ def register(user_data: UserCreate) -> User:
     response_model=Token,
     summary="User login",
 )
-def login(user_data: UserLogin) -> dict:
+@limiter.limit("5/minute")
+def login(request: Request, user_data: UserLogin) -> dict:
     """
     Authenticate user and issue access token.
 
@@ -217,6 +253,12 @@ def login(user_data: UserLogin) -> dict:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account is disabled",
                 headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if user.id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User ID is missing",
             )
 
         access_token = create_access_token(user.id)
@@ -266,6 +308,11 @@ def refresh_token(
     Returns:
         dict: New access token and token type.
     """
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User ID is missing",
+        )
     access_token = create_access_token(user.id)
     return {"access_token": access_token, "token_type": "bearer"}
 

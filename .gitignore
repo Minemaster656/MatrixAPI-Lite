@@ -16,3 +16,4 @@ wheels/
 # Secrets
 .env
 .env.local
+test_db.sqlite3

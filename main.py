@@ -8,19 +8,27 @@ HOW: Initializes FastAPI with lifespan events, mounts static files,
 
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from print_logo import print_logo
 from setproctitle import setproctitle
-from sqlmodel import Session, select
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+load_dotenv()
+from sqlmodel import Session, select, SQLModel
 
 from app.core.db import engine
 from app.models.models import Location
 from app.routers import auth
 from app.routers.http import characters, locations
 from app.routers.websocket import chat
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 def seed_locations() -> None:
@@ -55,7 +63,8 @@ def seed_locations() -> None:
         existing = session.exec(select(Location)).first()
         if not existing:
             for loc in default_locations:
-                session.add(Location(**loc))
+                location = Location.model_validate(loc)  # type: ignore[assignment]
+                session.add(location)
             session.commit()
 
 
@@ -81,9 +90,21 @@ app = FastAPI(
     description="Ролевой движок на базе веб-чата с простым API",
     version="0.1.0",
 )
+app.state.limiter = limiter
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse, summary="Landing page")

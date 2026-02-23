@@ -7,6 +7,7 @@ HOW: Uses python-jose for JWT encoding/decoding with HS256 algorithm.
      Uses Argon2id for password hashing (winner of PHC, resistant to GPU attacks).
 """
 
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -15,7 +16,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from jose import JWTError, jwt
 
-SECRET_KEY: str = secrets.token_urlsafe(32)
+SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS: int = 7
 
