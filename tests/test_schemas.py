@@ -204,18 +204,15 @@ class TestMessageSchemas:
         """MessageCreate should accept valid data."""
         msg = MessageCreate(
             text="Hello world!",
-            character_name="Hero",
             location_id=1,
         )
         assert msg.text == "Hello world!"
-        assert msg.character_name == "Hero"
 
     def test_message_create_empty_text(self):
         """MessageCreate should reject empty text."""
         with pytest.raises(ValidationError):
             MessageCreate(
                 text="",
-                character_name="Hero",
                 location_id=1,
             )
 
@@ -224,7 +221,6 @@ class TestMessageSchemas:
         with pytest.raises(ValidationError):
             MessageCreate(
                 text="x" * 5001,
-                character_name="Hero",
                 location_id=1,
             )
 

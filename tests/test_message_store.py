@@ -31,10 +31,9 @@ class TestMessageStore:
         """Add message should return the created message."""
         msg_data = MessageCreate(
             text="Hello world",
-            character_name="Hero",
             location_id=1,
         )
-        result = store.add_message(msg_data)
+        result = store.add_message(msg_data, character_name="Hero")
         assert result.text == "Hello world"
         assert result.character_name == "Hero"
         assert result.location_id == 1
@@ -42,13 +41,13 @@ class TestMessageStore:
 
     def test_add_message_stores_in_location(self, store):
         """Messages should be stored per location."""
-        msg1 = MessageCreate(text="First", character_name="Hero", location_id=1)
-        msg2 = MessageCreate(text="Second", character_name="Hero", location_id=1)
-        msg3 = MessageCreate(text="Other loc", character_name="Hero", location_id=2)
+        msg1 = MessageCreate(text="First", location_id=1)
+        msg2 = MessageCreate(text="Second", location_id=1)
+        msg3 = MessageCreate(text="Other loc", location_id=2)
 
-        store.add_message(msg1)
-        store.add_message(msg2)
-        store.add_message(msg3)
+        store.add_message(msg1, character_name="Hero")
+        store.add_message(msg2, character_name="Hero")
+        store.add_message(msg3, character_name="Hero")
 
         loc1_messages = store.get_messages(1)
         loc2_messages = store.get_messages(2)
@@ -67,9 +66,9 @@ class TestMessageStore:
             store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    character_name="Hero",
                     location_id=1,
-                )
+                ),
+                character_name="Hero",
             )
 
         messages = store.get_messages(1)
@@ -81,9 +80,9 @@ class TestMessageStore:
             store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    character_name="Hero",
                     location_id=1,
-                )
+                ),
+                character_name="Hero",
             )
 
         messages = store.get_messages(1, limit=10)
@@ -91,18 +90,18 @@ class TestMessageStore:
 
     def test_message_ids_increment(self, store):
         """Message IDs should increment uniquely."""
-        msg1 = MessageCreate(text="First", character_name="Hero", location_id=1)
-        msg2 = MessageCreate(text="Second", character_name="Hero", location_id=1)
+        msg1 = MessageCreate(text="First", location_id=1)
+        msg2 = MessageCreate(text="Second", location_id=1)
 
-        result1 = store.add_message(msg1)
-        result2 = store.add_message(msg2)
+        result1 = store.add_message(msg1, character_name="Hero")
+        result2 = store.add_message(msg2, character_name="Hero")
 
         assert result2.id > result1.id
 
     def test_message_has_created_at(self, store):
         """Messages should have created_at timestamp."""
-        msg = MessageCreate(text="Test", character_name="Hero", location_id=1)
-        result = store.add_message(msg)
+        msg = MessageCreate(text="Test", location_id=1)
+        result = store.add_message(msg, character_name="Hero")
         assert result.created_at is not None
 
     def test_generate_id_increments(self, store):

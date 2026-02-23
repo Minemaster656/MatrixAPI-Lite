@@ -172,9 +172,9 @@ class TestLocationMessages:
         message_store.add_message(
             MessageCreate(
                 text="Hello",
-                character_name="Hero",
                 location_id=1,
-            )
+            ),
+            character_name="Hero",
         )
 
         response = client.get("/api/locations/1/messages")
@@ -195,9 +195,9 @@ class TestLocationMessages:
             message_store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    character_name="Hero",
                     location_id=1,
-                )
+                ),
+                character_name="Hero",
             )
 
         response = client.get("/api/locations/1/messages?limit=10")

@@ -67,6 +67,8 @@ async def websocket_chat(websocket: WebSocket) -> None:
                 await _handle_set_character(websocket, data)
             elif msg_type == "set_location":
                 await _handle_set_location(websocket, data)
+            elif msg_type == "set_ooc":
+                await _handle_set_ooc(websocket, data)
 
     except WebSocketDisconnect:
         await _handle_disconnect(websocket)
@@ -84,7 +86,14 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
         data: Message data with 'text' field.
     """
     info = manager.get_info(websocket)
-    character_name = info.character_name or info.username or "Anonymous"
+    is_ooc = info.is_ooc
+
+    if is_ooc:
+        character_name = info.ooc_username or info.username or "Anonymous"
+    else:
+        character_name = info.character_name or info.username or "Anonymous"
+
+    sender_username = info.username
     avatar_url = info.avatar_url
     location_id = info.location_id
 
@@ -96,10 +105,8 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
     if not text:
         return
 
-    message = MessageCreate(
-        text=text, character_name=character_name, location_id=location_id
-    )
-    msg = message_store.add_message(message)
+    message = MessageCreate(text=text, location_id=location_id, is_ooc=is_ooc)
+    msg = message_store.add_message(message, character_name, sender_username)
 
     await manager.broadcast(
         {
@@ -107,7 +114,9 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
             "id": msg.id,
             "text": msg.text,
             "character_name": msg.character_name,
+            "sender_username": msg.sender_username,
             "avatar_url": avatar_url,
+            "is_ooc": msg.is_ooc,
             "created_at": msg.created_at.isoformat(),
         },
         location_id,
@@ -282,6 +291,27 @@ async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
             "users": manager.get_users_on_location(location_id),
         },
         location_id,
+    )
+
+
+async def _handle_set_ooc(websocket: WebSocket, data: dict) -> None:
+    """
+    Handle OOC mode toggle.
+
+    WHY: Allows users to switch between character and user identity.
+    HOW: Updates is_ooc flag in connection info.
+
+    Args:
+        websocket: The WebSocket connection.
+        data: Data with 'is_ooc' boolean field.
+    """
+    is_ooc = data.get("is_ooc", False)
+    ooc_username = data.get("ooc_username")
+    manager.set_ooc(websocket, is_ooc)
+    if ooc_username:
+        manager.set_ooc_username(websocket, ooc_username)
+    await websocket.send_json(
+        {"type": "ooc_set", "is_ooc": is_ooc, "ooc_username": ooc_username}
     )
 
 

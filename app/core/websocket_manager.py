@@ -10,6 +10,8 @@ class ConnectionInfo:
     character_id: Optional[int]
     avatar_url: Optional[str]
     location_id: Optional[int]
+    is_ooc: bool = False
+    ooc_username: Optional[str] = None
 
 
 class ConnectionManager:
@@ -90,6 +92,14 @@ class ConnectionManager:
     def set_username(self, websocket: WebSocket, username: str):
         if websocket in self.active_connections:
             self.active_connections[websocket].username = username
+
+    def set_ooc(self, websocket: WebSocket, is_ooc: bool):
+        if websocket in self.active_connections:
+            self.active_connections[websocket].is_ooc = is_ooc
+
+    def set_ooc_username(self, websocket: WebSocket, ooc_username: Optional[str]):
+        if websocket in self.active_connections:
+            self.active_connections[websocket].ooc_username = ooc_username
 
     def get_users_on_location(self, location_id: int) -> list[dict]:
         users = []

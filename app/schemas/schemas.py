@@ -136,13 +136,16 @@ class LocationRead(LocationBase):
 
 
 class MessageCreate(BaseModel):
-    """Schema for creating a chat message."""
+    """Schema for creating a chat message.
+
+    Character is now determined from WebSocket context, not passed explicitly.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     text: str = Field(..., min_length=1, max_length=5000)
-    character_name: str
     location_id: int
+    is_ooc: bool = Field(default=False)
 
 
 class MessageRead(BaseModel):
@@ -153,5 +156,7 @@ class MessageRead(BaseModel):
     id: int
     text: str
     character_name: str
+    sender_username: Optional[str] = None
     location_id: int
+    is_ooc: bool = Field(default=False)
     created_at: datetime

@@ -9,6 +9,10 @@
     {% block head %}{% endblock %}
     <style>
         {% block styles %}{% endblock %}
+        .ooc-message {
+            background: rgba(147, 51, 234, 0.1);
+            border-left: 3px solid #9333ea;
+        }
     </style>
 </head>
 <body class="bg-gray-900 min-h-screen flex flex-col {% block body_class %}{% endblock %}">

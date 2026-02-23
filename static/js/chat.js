@@ -4,6 +4,7 @@ let currentCharacterId = null;
 let currentCharacterName = null;
 let currentUsername = null;
 let selectedCharacterId = null;
+let isOocMode = false;
 
 function getToken() {
     return localStorage.getItem('access_token');
@@ -163,6 +164,25 @@ function joinChat() {
             renderOnlineUsers(data.users);
         } else if (data.type === 'error') {
             alert(data.message);
+        } else if (data.type === 'ooc_set') {
+            isOocMode = data.is_ooc;
+            const checkbox = document.getElementById('ooc-toggle');
+            if (checkbox) checkbox.checked = isOocMode;
+            const label = document.getElementById('ooc-label');
+            const charSelect = document.getElementById('character-select');
+            if (isOocMode) {
+                if (label) label.classList.remove('hidden');
+                if (charSelect) {
+                    charSelect.disabled = true;
+                    charSelect.classList.add('opacity-50');
+                }
+            } else {
+                if (label) label.classList.add('hidden');
+                if (charSelect) {
+                    charSelect.disabled = false;
+                    charSelect.classList.remove('opacity-50');
+                }
+            }
         }
     };
 
@@ -186,8 +206,36 @@ async function populateCharacterDropdown() {
         const selected = select.options[select.selectedIndex];
         currentCharacterId = parseInt(selected.value);
         currentCharacterName = selected.dataset.name;
-        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+        if (!isOocMode) {
+            ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+        }
     };
+}
+
+function toggleOocMode() {
+    const checkbox = document.getElementById('ooc-toggle');
+    isOocMode = checkbox.checked;
+    const label = document.getElementById('ooc-label');
+    const oocUserSelect = document.getElementById('ooc-user-select');
+    const charSelect = document.getElementById('character-select');
+    
+    if (isOocMode) {
+        label.classList.remove('hidden');
+        oocUserSelect.classList.remove('hidden');
+        charSelect.disabled = true;
+        charSelect.classList.add('opacity-50');
+        ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: true }));
+    } else {
+        label.classList.add('hidden');
+        oocUserSelect.classList.add('hidden');
+        charSelect.disabled = false;
+        charSelect.classList.remove('opacity-50');
+        const selected = charSelect.options[charSelect.selectedIndex];
+        currentCharacterId = parseInt(selected.value);
+        currentCharacterName = selected.dataset.name;
+        ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: false }));
+        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
+    }
 }
 
 function leaveChat() {
@@ -301,6 +349,7 @@ function renderOnlineUsers(users) {
         });
         
         updateMessageTargetDropdown(users);
+        updateOocUserDropdown(users);
     };
     renderTo('online-users');
     renderTo('online-users-mobile', true);
@@ -327,6 +376,27 @@ function updateMessageTargetDropdown(users) {
     }
 }
 
+function updateOocUserDropdown(users) {
+    const oocSelect = document.getElementById('ooc-user-select');
+    if (!oocSelect) return;
+    
+    oocSelect.innerHTML = '<option value="">От своего имени</option>';
+    
+    users.forEach(user => {
+        if (user.username !== 'Anonymous' && user.username !== currentUsername) {
+            const option = document.createElement('option');
+            option.value = user.username;
+            option.textContent = user.username;
+            oocSelect.appendChild(option);
+        }
+    });
+    
+    oocSelect.onchange = () => {
+        const selectedOocUser = oocSelect.value;
+        ws.send(JSON.stringify({ type: 'set_ooc', is_ooc: true, ooc_username: selectedOocUser || null }));
+    };
+}
+
 function clearBackground() {
     document.body.style.backgroundImage = '';
     document.body.style.backgroundSize = '';
@@ -338,16 +408,24 @@ function clearBackground() {
 function addMessage(data, isPrivate = false) {
     const messagesDiv = document.getElementById('messages');
     const div = document.createElement('div');
-    div.className = 'message' + (isPrivate ? ' private-message' : '');
+    const isOoc = data.is_ooc === true || data.is_ooc === 'true';
+    div.className = 'message' + (isPrivate ? ' private-message' : '') + (isOoc ? ' ooc-message' : '');
     
     const time = new Date(data.created_at).toLocaleTimeString();
     const renderedText = marked.parse(data.text);
     const avatarUrl = data.avatar_url || '/static/assets/img/builtin_avatars/mtrx_avatar_default1.png';
     
+    let authorDisplay = escapeHtml(data.character_name);
+    if (isOoc && data.sender_username) {
+        authorDisplay = `${escapeHtml(data.sender_username)} [OOC]`;
+    } else if (isOoc) {
+        authorDisplay = `${escapeHtml(data.character_name)} [OOC]`;
+    }
+    
     div.innerHTML = `
         <img src="${avatarUrl}" alt="${escapeHtml(data.character_name)}" class="message-avatar">
         <div class="message-content">
-            <div class="author">${escapeHtml(data.character_name)}${isPrivate ? ' <span class="text-purple-400">(личное)</span>' : ''}</div>
+            <div class="author">${authorDisplay}${isPrivate ? ' <span class="text-purple-400">(личное)</span>' : ''}</div>
             <div class="content">${renderedText}</div>
             <div class="time">${time}</div>
         </div>

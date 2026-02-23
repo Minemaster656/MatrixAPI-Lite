@@ -1,5 +1,5 @@
 from datetime import datetime, UTC
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.schemas.schemas import MessageCreate, MessageRead
 
 
@@ -12,13 +12,20 @@ class MessageStore:
         self._message_id += 1
         return self._message_id
 
-    def add_message(self, message: MessageCreate) -> MessageRead:
+    def add_message(
+        self,
+        message: MessageCreate,
+        character_name: str,
+        sender_username: Optional[str] = None,
+    ) -> MessageRead:
         self._message_id += 1
         msg = MessageRead(
             id=self._message_id,
             text=message.text,
-            character_name=message.character_name,
+            character_name=character_name,
+            sender_username=sender_username,
             location_id=message.location_id,
+            is_ooc=message.is_ooc,
             created_at=datetime.now(UTC),
         )
         if message.location_id not in self._messages:
