@@ -111,7 +111,6 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
     msg = message_store.add_message(
         message, character_name, sender_username, avatar_url, ooc_as_user
     )
-    manager.decrement_fading_messages(location_id)
 
     await manager.broadcast(
         {

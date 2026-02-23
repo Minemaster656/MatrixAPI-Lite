@@ -345,18 +345,15 @@ function renderOnlineUsers(users) {
         });
         
         Object.values(groupedByUser).forEach(userGroup => {
-            const hasCurrentMe = userGroup.characters.some(c => c.is_current && c.character_id === currentCharacterId);
+            const isMe = userGroup.characters.some(c => c.character_id === currentCharacterId);
             const div = document.createElement('div');
-            div.className = `mb-2 ${hasCurrentMe ? 'bg-blue-900/30 rounded-lg p-2' : ''}`;
+            div.className = `mb-2 ${isMe ? 'bg-blue-900/30 rounded-lg p-2' : ''}`;
             
             const charDivs = userGroup.characters.map(char => {
-                const charIsMe = char.is_current && char.character_id === currentCharacterId;
+                const charIsMe = char.character_id === currentCharacterId;
                 const avatarUrl = char.avatar_url || '/static/assets/img/builtin_avatars/mtrx_avatar_default1.png';
-                const opacity = char.opacity !== undefined ? char.opacity : 1.0;
-                const opacityClass = opacity < 1.0 ? `opacity-${Math.round(opacity * 100)}` : '';
-                const style = opacity < 1.0 ? `style="opacity: ${opacity}"` : '';
                 return `
-                    <div class="flex items-center gap-2 py-1 ${charIsMe ? 'text-blue-300' : 'text-gray-300'} ${!char.is_current ? 'text-gray-500' : ''}" ${style}>
+                    <div class="flex items-center gap-2 py-1 ${charIsMe ? 'text-blue-300' : 'text-gray-300'}">
                         <img src="${avatarUrl}" class="w-5 h-5 rounded-full object-cover">
                         <span class="truncate text-sm">${escapeHtml(char.character_name || char.username)}</span>
                         ${charIsMe ? '<span class="text-xs text-blue-400">(вы)</span>' : ''}
@@ -365,13 +362,13 @@ function renderOnlineUsers(users) {
             }).join('');
             
             div.innerHTML = `
-                <div class="text-xs text-gray-500 px-2 mb-1">${escapeHtml(userGroup.username)}${hasCurrentMe ? ' <span class="text-blue-400">(вы)</span>' : ''}</div>
+                <div class="text-xs text-gray-500 px-2 mb-1">${escapeHtml(userGroup.username)}${isMe ? ' <span class="text-blue-400">(вы)</span>' : ''}</div>
                 ${charDivs}
             `;
             list.appendChild(div);
         });
         
-        updateMessageTargetDropdown(users.filter(u => u.is_current));
+        updateMessageTargetDropdown(users);
     };
     renderTo('online-users');
     renderTo('online-users-mobile', true);

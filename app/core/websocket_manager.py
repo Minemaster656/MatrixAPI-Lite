@@ -1,23 +1,6 @@
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, Optional, List
-from dataclasses import dataclass, field
-from app.core.config import CHARACTER_FADEOUT_MESSAGE_COUNT
-
-
-@dataclass
-class FadingCharacter:
-    """
-    Character that was switched away from, gradually fading from online list.
-
-    WHY: Shows previous character presence for context during transition.
-    HOW: Decrements message_count on each message, removed when reaches 0.
-    """
-
-    username: str
-    character_name: str
-    character_id: int
-    avatar_url: Optional[str]
-    messages_left: int = CHARACTER_FADEOUT_MESSAGE_COUNT
+from typing import Dict, Optional
+from dataclasses import dataclass
 
 
 @dataclass
@@ -29,7 +12,6 @@ class ConnectionInfo:
     location_id: Optional[int]
     is_ooc: bool = False
     ooc_username: Optional[str] = None
-    fading_characters: List[FadingCharacter] = field(default_factory=list)
 
 
 class ConnectionManager:
@@ -104,14 +86,6 @@ class ConnectionManager:
     ):
         if websocket in self.active_connections:
             info = self.active_connections[websocket]
-            if info.character_id and info.character_id != character_id:
-                fading = FadingCharacter(
-                    username=info.username,
-                    character_name=info.character_name or "",
-                    character_id=info.character_id,
-                    avatar_url=info.avatar_url,
-                )
-                info.fading_characters.append(fading)
             info.character_name = character_name
             info.avatar_url = avatar_url
             info.character_id = character_id
@@ -128,53 +102,30 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections[websocket].ooc_username = ooc_username
 
-    def decrement_fading_messages(self, location_id: int):
-        """
-        Decrement message counter for all fading characters on location.
-
-        WHY: Controls how long old characters remain visible in online list.
-        HOW: Called on each message, removes characters when counter reaches 0.
-        """
-        for connection, info in self.active_connections.items():
-            if info.location_id == location_id:
-                info.fading_characters = [
-                    FadingCharacter(
-                        username=fc.username,
-                        character_name=fc.character_name,
-                        character_id=fc.character_id,
-                        avatar_url=fc.avatar_url,
-                        messages_left=fc.messages_left - 1,
-                    )
-                    for fc in info.fading_characters
-                    if fc.messages_left > 1
-                ]
-
     def get_users_on_location(self, location_id: int) -> list[dict]:
+        """
+        Get all users on a location.
+
+        WHY: Shows active characters grouped by user.
+        HOW: Collects all connections on location, de-duplicates by character.
+        """
+        seen_characters: set = set()
         users = []
+
         for connection, info in self.active_connections.items():
             if info.location_id == location_id:
-                users.append(
-                    {
-                        "username": info.username,
-                        "character_name": info.character_name,
-                        "character_id": info.character_id,
-                        "avatar_url": info.avatar_url,
-                        "is_current": True,
-                        "opacity": 1.0,
-                    }
-                )
-                for fc in info.fading_characters:
-                    opacity = fc.messages_left / CHARACTER_FADEOUT_MESSAGE_COUNT
+                key = (info.username, info.character_id)
+                if key not in seen_characters:
+                    seen_characters.add(key)
                     users.append(
                         {
-                            "username": fc.username,
-                            "character_name": fc.character_name,
-                            "character_id": fc.character_id,
-                            "avatar_url": fc.avatar_url,
-                            "is_current": False,
-                            "opacity": opacity,
+                            "username": info.username,
+                            "character_name": info.character_name,
+                            "character_id": info.character_id,
+                            "avatar_url": info.avatar_url,
                         }
                     )
+
         return users
 
 
