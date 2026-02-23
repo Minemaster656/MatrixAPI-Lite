@@ -1,0 +1,15 @@
+<div id="chat-panel" class="hidden">
+    {% include "chat/mobile-buttons.html" %}
+    
+    <div class="flex flex-col md:flex-row gap-4">
+        {% include "chat/locations-sidebar.html" %}
+        
+        <div class="flex-1 min-w-0">
+            {% include "chat/location-header.html" %}
+            {% include "chat/messages.html" %}
+            {% include "chat/input.html" %}
+        </div>
+        
+        {% include "chat/online-sidebar.html" %}
+    </div>
+</div>

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}RP Chat - Ролевой движок{% endblock %}
+
+{% block body_class %}relative{% endblock %}
+
+{% block body_start %}
+<canvas id="tsparticles" class="fixed top-0 left-0 w-full h-full z-0"></canvas>
+{% endblock %}
+
+{% block styles %}
+#tsparticles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+.hero-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+.section {
+    position: relative;
+    z-index: 1;
+}
+{% endblock %}
+
+{% block content %}
+<section class="hero-section pt-20">
+    <div class="container mx-auto px-4 text-center">
+        <h1 class="text-5xl md:text-7xl font-bold text-white mb-6">
+            RP Chat
+        </h1>
+        <p class="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto">
+            Ролевой движок на базе веб-чата с простым API для создания кастомных клиентов
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="/chat" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg">
+                Начать играть
+            </a>
+            <a href="/register" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg transition text-lg">
+                Регистрация
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section py-20 bg-gray-800/50 backdrop-blur-sm">
+    <div class="container mx-auto px-4">
+        <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-12">Возможности</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-blue-400 text-4xl mb-4">🎭</div>
+                <h3 class="text-xl font-bold text-white mb-3">Персонажи</h3>
+                <p class="text-gray-400">Создавайте уникальных персонажей с описаниями и статами. У одного игрока может быть несколько персонажей.</p>
+            </div>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-purple-400 text-4xl mb-4">🗺️</div>
+                <h3 class="text-xl font-bold text-white mb-3">Локации</h3>
+                <p class="text-gray-400">Исследуйте мир через систему локаций: мультивселенные, миры, планеты и подлокации.</p>
+            </div>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-pink-400 text-4xl mb-4">🤖</div>
+                <h3 class="text-xl font-bold text-white mb-3">NPC и LLM</h3>
+                <p class="text-gray-400">NPC легко заменяются LLM для создания интерактивных диалогов и квестов.</p>
+            </div>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-green-400 text-4xl mb-4">💬</div>
+                <h3 class="text-xl font-bold text-white mb-3">Чаты</h3>
+                <p class="text-gray-400">Личные сообщения между персонажами и чаты локаций с поддержкой markdown.</p>
+            </div>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-yellow-400 text-4xl mb-4">⚡</div>
+                <h3 class="text-xl font-bold text-white mb-3">Realtime</h3>
+                <p class="text-gray-400">Мгновенный обмен сообщениями через вебсокеты. Стейт синхронизируется в реальном времени.</p>
+            </div>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700">
+                <div class="text-cyan-400 text-4xl mb-4">🔌</div>
+                <h3 class="text-xl font-bold text-white mb-3">API</h3>
+                <p class="text-gray-400">Простое REST API для создания кастомных клиентов. Веб и TUI из коробки.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section py-20">
+    <div class="container mx-auto px-4">
+        <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-12">Как начать</h2>
+        <div class="max-w-2xl mx-auto">
+            <div class="flex gap-4 mb-8">
+                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">1</div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-2">Зарегистрируйтесь</h3>
+                    <p class="text-gray-400">Создайте аккаунт для доступа ко всем возможностям платформы.</p>
+                </div>
+            </div>
+            <div class="flex gap-4 mb-8">
+                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">2</div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-2">Создайте персонажа</h3>
+                    <p class="text-gray-400">Оформите персонажа с уникальным именем, описанием и характеристиками.</p>
+                </div>
+            </div>
+            <div class="flex gap-4 mb-8">
+                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">3</div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-2">Выберите локацию</h3>
+                    <p class="text-gray-400">Перемещайтесь между локациями мира и взаимодействуйте с другими игроками.</p>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">4</div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-2">Играйте!</h3>
+                    <p class="text-gray-400">Общайтесь, исследуйте мир и участвуйте в ролевых приключениях.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section py-20 bg-gradient-to-b from-gray-800/50 to-gray-900">
+    <div class="container mx-auto px-4 text-center">
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Готовы начать?</h2>
+        <p class="text-xl text-gray-300 mb-8">Присоединяйтесь к сообществу ролевых игроков</p>
+        <a href="/chat" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg">
+            Войти в игру
+        </a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% include "components/particles.html" %}
+{% endblock %}

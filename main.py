@@ -1,22 +1,39 @@
-from fastapi import FastAPI
+"""
+Main FastAPI application entry point.
+
+WHY: Central application configuration and routing setup.
+HOW: Initializes FastAPI with lifespan events, mounts static files,
+     configures Jinja2 templates, and includes all routers.
+"""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from print_logo import print_logo
-from contextlib import asynccontextmanager
-from sqlmodel import select
+from setproctitle import setproctitle
+from sqlmodel import Session, select
 
+from app.core.db import engine
+from app.models.models import Location
 from app.routers import auth
 from app.routers.http import locations
 from app.routers.websocket import chat
-from app.core.db import engine
-from app.models.models import Location
-from setproctitle import setproctitle
 
 
-def seed_locations():
-    from sqlmodel import Session
+def seed_locations() -> None:
+    """
+    Populate database with default locations on first run.
 
+    WHY: Provides initial game content without manual database setup.
+    HOW: Checks for existing locations, inserts defaults if table is empty.
+
+    Note:
+        Default locations include themed areas with background images
+        from Unsplash for immediate visual appeal.
+    """
     default_locations = [
         {
             "name": "Таверна",
@@ -44,20 +61,62 @@ def seed_locations():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+
+    WHY: Handles startup and shutdown events for the FastAPI application.
+    HOW: Seeds database on startup, yields control to the application.
+
+    Args:
+        app: The FastAPI application instance.
+    """
     seed_locations()
     yield
 
 
 print_logo()
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    title="RP Chat API",
+    description="Ролевой движок на базе веб-чата с простым API",
+    version="0.1.0",
+)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse, summary="Landing page")
 def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    """
+    Renders the landing page.
+
+    WHY: Main entry point for new users to learn about the platform.
+    HOW: Returns the landing.html template with Jinja2 rendering.
+    """
+    return templates.TemplateResponse("landing.html", {"request": request})
+
+
+@app.get("/chat", response_class=HTMLResponse, summary="Chat interface")
+def read_chat(request: Request):
+    """
+    Renders the chat interface.
+
+    WHY: Main game interface for role-playing interactions.
+    HOW: Returns the chat.html template with all required components.
+    """
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+
+@app.get("/register", response_class=HTMLResponse, summary="Registration page")
+def read_register(request: Request):
+    """
+    Renders the registration page.
+
+    WHY: Allows new users to create accounts.
+    HOW: Returns the register.html template with registration form.
+    """
+    return templates.TemplateResponse("register.html", {"request": request})
 
 
 app.include_router(auth.router)
