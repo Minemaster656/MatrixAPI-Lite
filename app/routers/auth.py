@@ -68,7 +68,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: int = int(user_id_raw)
+    user_id: str = user_id_raw
 
     with Session(engine) as session:
         user = session.get(User, user_id)
@@ -143,7 +143,7 @@ async def get_current_user_with_refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: int = int(user_id_raw)
+    user_id: str = user_id_raw
 
     with Session(engine) as session:
         user = session.get(User, user_id)

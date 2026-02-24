@@ -6,6 +6,7 @@ Tests for:
 - User info storage
 - Broadcasting messages
 - Location-based user tracking
+- Authentication state
 """
 
 import sys
@@ -15,7 +16,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.core.websocket_manager import ConnectionManager, ConnectionInfo, manager
+from app.core.websocket_manager import (
+    ConnectionManager,
+    ConnectionInfo,
+    manager,
+    ConnectionState,
+)
 
 
 class TestConnectionInfo:
@@ -29,6 +35,7 @@ class TestConnectionInfo:
         assert info.character_id is None
         assert info.avatar_url is None
         assert info.location_id is None
+        assert info.state == ConnectionState.PENDING
 
 
 class TestConnectionManager:
@@ -76,9 +83,10 @@ class TestConnectionManager:
         conn_manager.active_connections[mock_websocket] = ConnectionInfo(
             username="TestUser",
             character_name="Hero",
-            character_id=1,
+            character_id="char-1",
             avatar_url="/avatar.png",
-            location_id=5,
+            location_id="loc-5",
+            state=ConnectionState.AUTHENTICATED,
         )
         info = conn_manager.get_info(mock_websocket)
         assert info.username == "TestUser"
@@ -121,19 +129,19 @@ class TestConnectionManager:
     async def test_set_location_updates_location(self, conn_manager, mock_websocket):
         """Set location should update the location_id."""
         await conn_manager.connect(mock_websocket)
-        conn_manager.set_location(mock_websocket, 42)
+        conn_manager.set_location(mock_websocket, "loc-42")
         info = conn_manager.get_info(mock_websocket)
-        assert info.location_id == 42
+        assert info.location_id == "loc-42"
 
     @pytest.mark.asyncio
     async def test_set_character_updates_info(self, conn_manager, mock_websocket):
         """Set character should update character fields."""
         await conn_manager.connect(mock_websocket)
-        conn_manager.set_character(mock_websocket, "Warrior", "/avatar.png", 10)
+        conn_manager.set_character(mock_websocket, "Warrior", "/avatar.png", "char-10")
         info = conn_manager.get_info(mock_websocket)
         assert info.character_name == "Warrior"
         assert info.avatar_url == "/avatar.png"
-        assert info.character_id == 10
+        assert info.character_id == "char-10"
 
     @pytest.mark.asyncio
     async def test_set_username_updates_username(self, conn_manager, mock_websocket):
@@ -144,8 +152,34 @@ class TestConnectionManager:
         assert info.username == "NewName"
 
     @pytest.mark.asyncio
-    async def test_get_users_on_location_returns_correct_users(self, conn_manager):
-        """Get users on location should return users in that location."""
+    async def test_authenticate_sets_state(self, conn_manager, mock_websocket):
+        """Authenticate should set connection state to AUTHENTICATED."""
+        await conn_manager.connect(mock_websocket, username="user1")
+        conn_manager.authenticate(mock_websocket, user_id="user-1", username="user1")
+        info = conn_manager.get_info(mock_websocket)
+        assert info.state == ConnectionState.AUTHENTICATED
+        assert info.user_id == "user-1"
+
+    @pytest.mark.asyncio
+    async def test_is_authenticated_returns_false_for_pending(
+        self, conn_manager, mock_websocket
+    ):
+        """is_authenticated should return False for PENDING state."""
+        await conn_manager.connect(mock_websocket)
+        assert conn_manager.is_authenticated(mock_websocket) is False
+
+    @pytest.mark.asyncio
+    async def test_is_authenticated_returns_true_for_authenticated(
+        self, conn_manager, mock_websocket
+    ):
+        """is_authenticated should return True for AUTHENTICATED state."""
+        await conn_manager.connect(mock_websocket)
+        conn_manager.authenticate(mock_websocket, user_id="user-1", username="user1")
+        assert conn_manager.is_authenticated(mock_websocket) is True
+
+    @pytest.mark.asyncio
+    async def test_get_users_on_location_returns_only_authenticated(self, conn_manager):
+        """Get users on location should return only authenticated users."""
         ws1 = AsyncMock()
         ws2 = AsyncMock()
         ws3 = AsyncMock()
@@ -154,39 +188,58 @@ class TestConnectionManager:
         await conn_manager.connect(ws2, username="user2")
         await conn_manager.connect(ws3, username="user3")
 
-        conn_manager.set_location(ws1, 1)
-        conn_manager.set_location(ws2, 1)
-        conn_manager.set_location(ws3, 2)
+        conn_manager.authenticate(ws1, user_id="u1", username="user1")
+        conn_manager.authenticate(ws2, user_id="u2", username="user2")
 
-        users_in_loc1 = conn_manager.get_users_on_location(1)
-        users_in_loc2 = conn_manager.get_users_on_location(2)
+        conn_manager.set_location(ws1, "loc-1")
+        conn_manager.set_location(ws2, "loc-1")
+        conn_manager.set_location(ws3, "loc-2")
+
+        users_in_loc1 = conn_manager.get_users_on_location("loc-1")
+        users_in_loc2 = conn_manager.get_users_on_location("loc-2")
 
         assert len(users_in_loc1) == 2
-        assert len(users_in_loc2) == 1
+        assert len(users_in_loc2) == 0
 
     def test_find_connection_by_username(self, conn_manager, mock_websocket):
-        """Find connection by username should work."""
+        """Find connection by username should work for authenticated users."""
         conn_manager.active_connections[mock_websocket] = ConnectionInfo(
             username="searchable_user",
             character_name=None,
             character_id=None,
             avatar_url=None,
             location_id=None,
+            state=ConnectionState.AUTHENTICATED,
         )
         result = conn_manager.find_connection_by_username("searchable_user")
         assert result is mock_websocket
 
     def test_find_connection_by_character_name(self, conn_manager, mock_websocket):
-        """Find connection should also search by character name."""
+        """Find connection should also search by character name for authenticated users."""
         conn_manager.active_connections[mock_websocket] = ConnectionInfo(
             username="real_user",
             character_name="my_character",
             character_id=None,
             avatar_url=None,
             location_id=None,
+            state=ConnectionState.AUTHENTICATED,
         )
         result = conn_manager.find_connection_by_username("my_character")
         assert result is mock_websocket
+
+    def test_find_connection_returns_none_for_pending(self, conn_manager):
+        """Find connection should return None for pending connections."""
+        ws = AsyncMock()
+        conn_manager.active_connections[ws] = ConnectionInfo(
+            username="pending_user",
+            character_name=None,
+            character_id=None,
+            avatar_url=None,
+            location_id=None,
+            state=ConnectionState.PENDING,
+        )
+        result = conn_manager.find_connection_by_username("pending_user")
+        assert result is None
 
     def test_find_connection_returns_none(self, conn_manager):
         """Find connection should return None if not found."""
@@ -194,20 +247,22 @@ class TestConnectionManager:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_broadcast_to_all_when_no_location(self, conn_manager):
-        """Broadcast without location should send to all."""
+    async def test_broadcast_to_authenticated_only(self, conn_manager):
+        """Broadcast should only send to authenticated connections."""
         ws1 = AsyncMock()
         ws2 = AsyncMock()
         ws1.send_text = AsyncMock()
         ws2.send_text = AsyncMock()
 
-        await conn_manager.connect(ws1)
-        await conn_manager.connect(ws2)
+        await conn_manager.connect(ws1, username="user1")
+        await conn_manager.connect(ws2, username="user2")
+
+        conn_manager.authenticate(ws1, user_id="u1", username="user1")
 
         await conn_manager.broadcast({"type": "test"})
 
         ws1.send_text.assert_called_once()
-        ws2.send_text.assert_called_once()
+        ws2.send_text.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_broadcast_to_specific_location(self, conn_manager):
@@ -217,13 +272,16 @@ class TestConnectionManager:
         ws1.send_text = AsyncMock()
         ws2.send_text = AsyncMock()
 
-        await conn_manager.connect(ws1)
-        await conn_manager.connect(ws2)
+        await conn_manager.connect(ws1, username="user1")
+        await conn_manager.connect(ws2, username="user2")
 
-        conn_manager.set_location(ws1, 1)
-        conn_manager.set_location(ws2, 2)
+        conn_manager.authenticate(ws1, user_id="u1", username="user1")
+        conn_manager.authenticate(ws2, user_id="u2", username="user2")
 
-        await conn_manager.broadcast({"type": "test"}, location_id=1)
+        conn_manager.set_location(ws1, "loc-1")
+        conn_manager.set_location(ws2, "loc-2")
+
+        await conn_manager.broadcast({"type": "test"}, location_id="loc-1")
 
         ws1.send_text.assert_called_once()
         ws2.send_text.assert_not_called()

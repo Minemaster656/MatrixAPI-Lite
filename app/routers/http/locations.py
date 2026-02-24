@@ -86,7 +86,7 @@ def get_locations() -> List[Location]:
     summary="Get a specific location",
     description="Returns detailed information about a specific location by ID.",
 )
-def get_location(location_id: int) -> Location:
+def get_location(location_id: str) -> Location:
     """
     Retrieve a single location by ID.
 
@@ -115,7 +115,7 @@ def get_location(location_id: int) -> Location:
     summary="Get messages for a location",
     description="Returns recent messages from a specific location chat.",
 )
-def get_messages(location_id: int, limit: int = 100) -> List:
+def get_messages(location_id: str, limit: int = 100) -> List:
     """
     Retrieve messages for a location.
 

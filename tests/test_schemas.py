@@ -81,7 +81,7 @@ class TestUserSchemas:
     def test_user_read_from_model(self):
         """UserRead should work with ORM model attributes."""
         user = UserRead(
-            id=1,
+            id="uuid-1234",
             username="testuser",
             email="test@example.com",
             avatar_url=None,
@@ -89,13 +89,23 @@ class TestUserSchemas:
             is_admin=False,
             created_at=datetime.now(),
         )
-        assert user.id == 1
+        assert user.id == "uuid-1234"
         assert user.username == "testuser"
 
     def test_user_update_partial(self):
         """UserUpdate should allow partial updates."""
         update = UserUpdate(avatar_url="/new/avatar.png")
         assert update.avatar_url == "/new/avatar.png"
+
+    def test_user_update_avatar_url_sanitization(self):
+        """UserUpdate should sanitize dangerous URLs."""
+        update = UserUpdate(avatar_url="javascript:alert('xss')")
+        assert update.avatar_url is None
+
+    def test_user_update_avatar_url_static(self):
+        """UserUpdate should allow static paths."""
+        update = UserUpdate(avatar_url="/static/avatars/test.png")
+        assert update.avatar_url == "/static/avatars/test.png"
 
 
 class TestCharacterSchemas:
@@ -129,16 +139,16 @@ class TestCharacterSchemas:
     def test_character_read_from_model(self):
         """CharacterRead should work with model data."""
         char = CharacterRead(
-            id=1,
+            id="char-uuid-1234",
             name="Hero",
             description="Description",
-            owner_id=10,
+            owner_id="user-uuid-5678",
             avatar_url="/avatar.png",
             created_at=datetime.now(),
             updated_at=datetime.now(),
         )
-        assert char.id == 1
-        assert char.owner_id == 10
+        assert char.id == "char-uuid-1234"
+        assert char.owner_id == "user-uuid-5678"
 
     def test_character_update_partial(self):
         """CharacterUpdate should allow partial updates."""
@@ -156,6 +166,11 @@ class TestCharacterSchemas:
         assert update.name == "New Name"
         assert update.description == "New desc"
         assert update.avatar_url == "/new.png"
+
+    def test_character_update_avatar_url_sanitization(self):
+        """CharacterUpdate should sanitize dangerous URLs."""
+        update = CharacterUpdate(avatar_url="javascript:alert('xss')")
+        assert update.avatar_url is None
 
 
 class TestLocationSchemas:
@@ -186,15 +201,20 @@ class TestLocationSchemas:
     def test_location_read_from_model(self):
         """LocationRead should work with model data."""
         loc = LocationRead(
-            id=1,
+            id="loc-uuid-1234",
             name="Tavern",
             description="Description",
             background_url=None,
-            creator_id=1,
+            creator_id="user-uuid-5678",
             created_at=datetime.now(),
         )
-        assert loc.id == 1
-        assert loc.creator_id == 1
+        assert loc.id == "loc-uuid-1234"
+        assert loc.creator_id == "user-uuid-5678"
+
+    def test_location_background_url_sanitization(self):
+        """LocationCreate should sanitize dangerous URLs."""
+        loc = LocationCreate(name="Test", background_url="javascript:alert('xss')")
+        assert loc.background_url is None
 
 
 class TestMessageSchemas:
@@ -204,7 +224,7 @@ class TestMessageSchemas:
         """MessageCreate should accept valid data."""
         msg = MessageCreate(
             text="Hello world!",
-            location_id=1,
+            location_id="loc-uuid-1234",
         )
         assert msg.text == "Hello world!"
 
@@ -213,7 +233,7 @@ class TestMessageSchemas:
         with pytest.raises(ValidationError):
             MessageCreate(
                 text="",
-                location_id=1,
+                location_id="loc-uuid-1234",
             )
 
     def test_message_create_long_text(self):
@@ -221,7 +241,7 @@ class TestMessageSchemas:
         with pytest.raises(ValidationError):
             MessageCreate(
                 text="x" * 5001,
-                location_id=1,
+                location_id="loc-uuid-1234",
             )
 
     def test_message_read_from_model(self):
@@ -230,7 +250,7 @@ class TestMessageSchemas:
             id=1,
             text="Hello",
             character_name="Hero",
-            location_id=1,
+            location_id="loc-uuid-1234",
             created_at=datetime.now(),
         )
         assert msg.id == 1

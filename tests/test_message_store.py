@@ -31,7 +31,7 @@ class TestMessageStore:
         """Add message should return the created message."""
         msg_data = MessageCreate(
             text="Hello world",
-            location_id=1,
+            location_id="loc-001",
         )
         result = store.add_message(
             msg_data, character_name="Hero", avatar_url="/avatar.png"
@@ -39,28 +39,28 @@ class TestMessageStore:
         assert result.text == "Hello world"
         assert result.character_name == "Hero"
         assert result.avatar_url == "/avatar.png"
-        assert result.location_id == 1
+        assert result.location_id == "loc-001"
         assert result.id is not None
 
     def test_add_message_stores_in_location(self, store):
         """Messages should be stored per location."""
-        msg1 = MessageCreate(text="First", location_id=1)
-        msg2 = MessageCreate(text="Second", location_id=1)
-        msg3 = MessageCreate(text="Other loc", location_id=2)
+        msg1 = MessageCreate(text="First", location_id="loc-001")
+        msg2 = MessageCreate(text="Second", location_id="loc-001")
+        msg3 = MessageCreate(text="Other loc", location_id="loc-002")
 
         store.add_message(msg1, character_name="Hero")
         store.add_message(msg2, character_name="Hero")
         store.add_message(msg3, character_name="Hero")
 
-        loc1_messages = store.get_messages(1)
-        loc2_messages = store.get_messages(2)
+        loc1_messages = store.get_messages("loc-001")
+        loc2_messages = store.get_messages("loc-002")
 
         assert len(loc1_messages) == 2
         assert len(loc2_messages) == 1
 
     def test_get_messages_empty_location(self, store):
         """Getting messages for empty location should return empty list."""
-        result = store.get_messages(999)
+        result = store.get_messages("nonexistent")
         assert result == []
 
     def test_get_messages_default_limit(self, store):
@@ -69,13 +69,13 @@ class TestMessageStore:
             store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    location_id=1,
+                    location_id="loc-001",
                 ),
                 character_name="Hero",
                 avatar_url="/avatar.png",
             )
 
-        messages = store.get_messages(1)
+        messages = store.get_messages("loc-001")
         assert len(messages) == 100
 
     def test_get_messages_custom_limit(self, store):
@@ -84,19 +84,19 @@ class TestMessageStore:
             store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    location_id=1,
+                    location_id="loc-001",
                 ),
                 character_name="Hero",
                 avatar_url="/avatar.png",
             )
 
-        messages = store.get_messages(1, limit=10)
+        messages = store.get_messages("loc-001", limit=10)
         assert len(messages) == 10
 
     def test_message_ids_increment(self, store):
         """Message IDs should increment uniquely."""
-        msg1 = MessageCreate(text="First", location_id=1)
-        msg2 = MessageCreate(text="Second", location_id=1)
+        msg1 = MessageCreate(text="First", location_id="loc-001")
+        msg2 = MessageCreate(text="Second", location_id="loc-001")
 
         result1 = store.add_message(msg1, character_name="Hero")
         result2 = store.add_message(msg2, character_name="Hero")
@@ -105,7 +105,7 @@ class TestMessageStore:
 
     def test_message_has_created_at(self, store):
         """Messages should have created_at timestamp."""
-        msg = MessageCreate(text="Test", location_id=1)
+        msg = MessageCreate(text="Test", location_id="loc-001")
         result = store.add_message(msg, character_name="Hero")
         assert result.created_at is not None
 

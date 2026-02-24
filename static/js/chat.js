@@ -115,9 +115,22 @@ function joinChat() {
 
     currentLocationId = locationId;
     currentCharacterId = selectedCharacterId;
-    ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
+    
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/chat`);
 
     ws.onopen = async () => {
+        const token = getToken();
+        ws.send(JSON.stringify({ type: 'auth', token: token }));
+    };
+
+    ws.onauthresult = async (data) => {
+        if (!data.success) {
+            alert('Ошибка аутентификации: ' + data.message);
+            ws.close();
+            return;
+        }
+        
         const locResponse = await fetch(`/api/locations/${locationId}`);
         const locationData = await locResponse.json();
         
@@ -128,7 +141,7 @@ function joinChat() {
         
         document.getElementById('location-name').textContent = locationData.name;
         
-        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername, token: getToken() }));
+        ws.send(JSON.stringify({ type: 'set_character', character_id: currentCharacterId, character_name: currentCharacterName, username: currentUsername }));
         ws.send(JSON.stringify({ type: 'set_location', location_id: locationId }));
         
         const locationsResponse = await fetch('/api/locations');
@@ -144,7 +157,12 @@ function joinChat() {
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
-        if (data.type === 'message') {
+        if (data.type === 'auth_result') {
+            if (ws.onauthresult) {
+                ws.onauthresult(data);
+                ws.onauthresult = null;
+            }
+        } else if (data.type === 'message') {
             addMessage(data);
         } else if (data.type === 'private_message') {
             addMessage(data, true);

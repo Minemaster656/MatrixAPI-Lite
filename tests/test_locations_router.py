@@ -130,13 +130,14 @@ class TestLocationRetrieval:
 
     def test_get_single_location(self, client, db_session, test_user, auth_token):
         """Getting single location should work."""
-        client.post(
+        create_response = client.post(
             "/api/locations",
             json={"name": "Test Location"},
             headers={"Authorization": f"Bearer {auth_token}"},
         )
+        location_id = create_response.json()["id"]
 
-        response = client.get("/api/locations/1")
+        response = client.get(f"/api/locations/{location_id}")
         assert response.status_code == 200
         assert response.json()["name"] == "Test Location"
 
@@ -163,21 +164,22 @@ class TestLocationMessages:
 
     def test_get_messages_with_data(self, client, db_session, test_user, auth_token):
         """Getting messages should return stored messages."""
-        client.post(
+        create_response = client.post(
             "/api/locations",
             json={"name": "Test Loc"},
             headers={"Authorization": f"Bearer {auth_token}"},
         )
+        location_id = create_response.json()["id"]
 
         message_store.add_message(
             MessageCreate(
                 text="Hello",
-                location_id=1,
+                location_id=location_id,
             ),
             character_name="Hero",
         )
 
-        response = client.get("/api/locations/1/messages")
+        response = client.get(f"/api/locations/{location_id}/messages")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -185,21 +187,22 @@ class TestLocationMessages:
 
     def test_get_messages_custom_limit(self, client, db_session, test_user, auth_token):
         """Getting messages should respect limit parameter."""
-        client.post(
+        create_response = client.post(
             "/api/locations",
             json={"name": "Test Loc"},
             headers={"Authorization": f"Bearer {auth_token}"},
         )
+        location_id = create_response.json()["id"]
 
         for i in range(50):
             message_store.add_message(
                 MessageCreate(
                     text=f"Message {i}",
-                    location_id=1,
+                    location_id=location_id,
                 ),
                 character_name="Hero",
             )
 
-        response = client.get("/api/locations/1/messages?limit=10")
+        response = client.get(f"/api/locations/{location_id}/messages?limit=10")
         assert response.status_code == 200
         assert len(response.json()) == 10

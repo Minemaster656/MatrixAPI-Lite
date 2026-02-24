@@ -26,6 +26,7 @@ from app.core.db import engine
 from app.models.models import Location
 from app.routers import auth
 from app.routers.http import characters, locations
+from app.routers.http import config
 from app.routers.websocket import chat
 
 limiter = Limiter(key_func=get_remote_address)
@@ -166,6 +167,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(locations.router)
 app.include_router(characters.router)
+app.include_router(config.router)
 
 if __name__ == "__main__":
     setproctitle("MatrixAPI")

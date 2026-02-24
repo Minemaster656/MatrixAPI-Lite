@@ -67,7 +67,7 @@ def create_character(
         Character: The created character.
     """
     with Session(engine) as session:
-        owner_id: int = user.id  # type: ignore
+        owner_id: str = user.id  # type: ignore
         character = Character(
             name=character_data.name,
             description=character_data.description,
@@ -113,7 +113,7 @@ def get_my_characters(
     summary="Get a specific character",
 )
 def get_character(
-    character_id: int,
+    character_id: str,
     user: Annotated[User, Depends(get_current_user)],
 ) -> Character:
     """
@@ -148,7 +148,7 @@ def get_character(
     summary="Update a character",
 )
 def update_character(
-    character_id: int,
+    character_id: str,
     update_data: CharacterUpdate,
     user: Annotated[User, Depends(get_current_user)],
 ) -> Character:
@@ -194,7 +194,7 @@ def update_character(
     summary="Delete a character",
 )
 def delete_character(
-    character_id: int,
+    character_id: str,
     user: Annotated[User, Depends(get_current_user)],
 ) -> None:
     """

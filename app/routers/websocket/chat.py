@@ -3,17 +3,21 @@ WebSocket endpoint for real-time chat communication.
 
 WHY: Enables real-time bidirectional communication for the chat system.
 HOW: Uses FastAPI WebSocket with custom message protocol for:
+     - Authentication via token (required before any other messages)
      - Setting character identity
      - Joining/switching locations
      - Broadcasting messages to location participants
 """
 
+import html
 from datetime import datetime, timezone
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import select, Session
 
-from app.core.websocket_manager import manager
+from app.core.websocket_manager import manager, ConnectionState
 from app.core.db import engine
+from app.core.auth import decode_access_token
 from app.models.models import Character, Location
 from app.services.message_store import message_store
 from app.schemas.schemas import MessageCreate
@@ -21,37 +25,30 @@ from app.schemas.schemas import MessageCreate
 router = APIRouter(tags=["websocket"])
 
 
+def sanitize_text(text: str) -> str:
+    """Sanitize text to prevent XSS."""
+    return html.escape(text.strip())
+
+
 @router.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket) -> None:
     """
     Main WebSocket endpoint for chat functionality.
 
-    WHY: Central real-time communication channel for all chat interactions.
-    HOW: Maintains persistent connection and handles message routing:
-         - 'message': Broadcasts text to current location
-         - 'set_character': Associates websocket with character name
-         - 'set_location': Joins location room and sends history
+    Protocol:
+        1. Client connects (PENDING state)
+        2. Client MUST send auth message first:
+           {"type": "auth", "token": "valid_jwt_token"}
+        3. Server responds with auth_result:
+           {"type": "auth_result", "success": true/false, "user_id": "...", "username": "..."}
+        4. Only after successful auth, client can send other messages
 
-    Protocol messages:
-        Client -> Server:
-            {"type": "message", "text": "..."}
-            {"type": "set_character", "character_name": "..."}
-            {"type": "set_location", "location_id": int}
-
-        Server -> Client:
-            {"type": "message", "id": int, "text": "...", "character_name": "...", "created_at": "ISO"}
-            {"type": "character_set", "character_name": "..."}
-            {"type": "location_set", "location_id": int, "location_name": "...", "background_url": "...", "messages": [...]}
-            {"type": "locations_list", "locations": [...]}
-            {"type": "online_users", "users": [...]}
-            {"type": "error", "message": "..."}
-
-    Args:
-        websocket: The WebSocket connection instance.
-
-    Note:
-        Connection is automatically cleaned up on disconnect,
-        and other users are notified of the departure.
+    Message types after authentication:
+        - message: Broadcast text to current location
+        - private_message: Send to specific user
+        - set_character: Set character identity
+        - set_location: Join location room
+        - set_ooc: Toggle OOC mode
     """
     await manager.connect(websocket, username="Anonymous")
     try:
@@ -59,32 +56,94 @@ async def websocket_chat(websocket: WebSocket) -> None:
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
-            if msg_type == "message":
-                await _handle_message(websocket, data)
-            elif msg_type == "private_message":
-                await _handle_private_message(websocket, data)
-            elif msg_type == "set_character":
-                await _handle_set_character(websocket, data)
-            elif msg_type == "set_location":
-                await _handle_set_location(websocket, data)
-            elif msg_type == "set_ooc":
-                await _handle_set_ooc(websocket, data)
+            if msg_type == "auth":
+                await _handle_auth(websocket, data)
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+            else:
+                if not manager.is_authenticated(websocket):
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Authentication required. Send auth message first.",
+                        }
+                    )
+                    continue
+
+                if msg_type == "message":
+                    await _handle_message(websocket, data)
+                elif msg_type == "private_message":
+                    await _handle_private_message(websocket, data)
+                elif msg_type == "set_character":
+                    await _handle_set_character(websocket, data)
+                elif msg_type == "set_location":
+                    await _handle_set_location(websocket, data)
+                elif msg_type == "set_ooc":
+                    await _handle_set_ooc(websocket, data)
 
     except WebSocketDisconnect:
         await _handle_disconnect(websocket)
 
 
+async def _handle_auth(websocket: WebSocket, data: dict) -> None:
+    """Handle authentication message."""
+    token = data.get("token")
+    if not token:
+        await websocket.send_json(
+            {"type": "auth_result", "success": False, "message": "Token is required"}
+        )
+        return
+
+    payload = decode_access_token(token)
+    if not payload:
+        await websocket.send_json(
+            {
+                "type": "auth_result",
+                "success": False,
+                "message": "Invalid or expired token",
+            }
+        )
+        return
+
+    user_id = payload.get("sub")
+    if not user_id:
+        await websocket.send_json(
+            {
+                "type": "auth_result",
+                "success": False,
+                "message": "Invalid token payload",
+            }
+        )
+        return
+
+    from app.models.models import User
+
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if not user or not user.is_active or user.id is None:
+            await websocket.send_json(
+                {
+                    "type": "auth_result",
+                    "success": False,
+                    "message": "User not found or inactive",
+                }
+            )
+            return
+
+        manager.authenticate(websocket, user_id=user.id, username=user.username)
+
+    await websocket.send_json(
+        {
+            "type": "auth_result",
+            "success": True,
+            "user_id": user_id,
+            "username": user.username,
+        }
+    )
+
+
 async def _handle_message(websocket: WebSocket, data: dict) -> None:
-    """
-    Handle incoming chat message.
-
-    WHY: Routes messages to the correct location participants.
-    HOW: Validates location is set, stores message, broadcasts to location.
-
-    Args:
-        websocket: The sender's WebSocket connection.
-        data: Message data with 'text' field.
-    """
+    """Handle incoming chat message."""
     info = manager.get_info(websocket)
     is_ooc = info.is_ooc
     ooc_as_user = is_ooc and info.ooc_username is not None
@@ -106,6 +165,8 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
     text = data.get("text", "")
     if not text:
         return
+
+    text = sanitize_text(text)
 
     message = MessageCreate(text=text, location_id=location_id, is_ooc=is_ooc)
     msg = message_store.add_message(
@@ -129,16 +190,7 @@ async def _handle_message(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
-    """
-    Handle incoming private/direct message.
-
-    WHY: Allows users to send private messages to each other.
-    HOW: Finds target WebSocket by username, sends only to that user.
-
-    Args:
-        websocket: The sender's WebSocket connection.
-        data: Message data with 'text' and 'target_username' fields.
-    """
+    """Handle incoming private/direct message."""
     info = manager.get_info(websocket)
     sender_name = info.character_name or info.username or "Anonymous"
     sender_avatar = info.avatar_url
@@ -156,6 +208,8 @@ async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
         )
         return
 
+    text = sanitize_text(text)
+
     message_payload = {
         "type": "private_message",
         "id": message_store.generate_id(),
@@ -172,17 +226,7 @@ async def _handle_private_message(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
-    """
-    Handle character identity setting.
-
-    WHY: Associates the WebSocket connection with a character name.
-    HOW: Updates connection metadata in the connection manager.
-          Validates that character belongs to the authenticated user.
-
-    Args:
-        websocket: The WebSocket connection.
-        data: Data with 'character_id', 'character_name', and optional 'token' fields.
-    """
+    """Handle character identity setting."""
     character_id = data.get("character_id")
     character_name = data.get("character_name", "")
     username = data.get("username", "Anonymous")
@@ -190,25 +234,12 @@ async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
     avatar_url = None
     user_id = None
 
-    if token:
-        from app.core.auth import decode_access_token
-
-        payload = decode_access_token(token)
-        if payload:
-            sub = payload.get("sub")
-            if sub is not None:
-                user_id = int(sub)
+    info = manager.get_info(websocket)
+    user_id = info.user_id
 
     if character_id and user_id is not None:
-        try:
-            char_id_int = int(character_id)
-        except (TypeError, ValueError):
-            await websocket.send_json(
-                {"type": "error", "message": "Invalid character_id"}
-            )
-            return
         with Session(engine) as session:
-            character = session.get(Character, char_id_int)
+            character = session.get(Character, character_id)
             if character and character.owner_id == user_id:
                 avatar_url = character.avatar_url
                 character_name = character.name
@@ -242,16 +273,7 @@ async def _handle_set_character(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
-    """
-    Handle location join/switch.
-
-    WHY: Manages user presence in location rooms and sends context.
-    HOW: Updates room membership, sends history and online users.
-
-    Args:
-        websocket: The WebSocket connection.
-        data: Data with 'location_id' field.
-    """
+    """Handle location join/switch."""
     location_id = data.get("location_id")
     if location_id is None:
         await websocket.send_json(
@@ -319,18 +341,7 @@ async def _handle_set_location(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_set_ooc(websocket: WebSocket, data: dict) -> None:
-    """
-    Handle OOC mode toggle.
-
-    WHY: Allows users to switch between character and user identity.
-    HOW: Updates is_ooc flag in connection info.
-         If as_user is True, messages will be sent as the user (username).
-         If as_user is False, messages will be sent as character but with [OOC] tag.
-
-    Args:
-        websocket: The WebSocket connection.
-        data: Data with 'is_ooc' boolean field and optional 'as_user' boolean.
-    """
+    """Handle OOC mode toggle."""
     is_ooc = data.get("is_ooc", False)
     as_user = data.get("as_user", False)
     info = manager.get_info(websocket)
@@ -343,15 +354,7 @@ async def _handle_set_ooc(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_disconnect(websocket: WebSocket) -> None:
-    """
-    Handle WebSocket disconnection.
-
-    WHY: Cleans up connection state and notifies other users.
-    HOW: Removes from manager and broadcasts updated user list.
-
-    Args:
-        websocket: The disconnected WebSocket connection.
-    """
+    """Handle WebSocket disconnection."""
     info = manager.get_info(websocket)
     location_id = info.location_id
     manager.disconnect(websocket)

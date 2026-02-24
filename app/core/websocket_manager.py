@@ -1,17 +1,25 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, Optional
 from dataclasses import dataclass
+from enum import Enum
+
+
+class ConnectionState(Enum):
+    PENDING = "pending"
+    AUTHENTICATED = "authenticated"
 
 
 @dataclass
 class ConnectionInfo:
     username: str
     character_name: Optional[str]
-    character_id: Optional[int]
+    character_id: Optional[str]
     avatar_url: Optional[str]
-    location_id: Optional[int]
+    location_id: Optional[str]
     is_ooc: bool = False
     ooc_username: Optional[str] = None
+    state: ConnectionState = ConnectionState.PENDING
+    user_id: Optional[str] = None
 
 
 class ConnectionManager:
@@ -23,9 +31,9 @@ class ConnectionManager:
         websocket: WebSocket,
         username: str = "Anonymous",
         character_name: Optional[str] = None,
-        character_id: Optional[int] = None,
+        character_id: Optional[str] = None,
         avatar_url: Optional[str] = None,
-        location_id: Optional[int] = None,
+        location_id: Optional[str] = None,
     ):
         await websocket.accept()
         self.active_connections[websocket] = ConnectionInfo(
@@ -34,7 +42,24 @@ class ConnectionManager:
             character_id=character_id,
             avatar_url=avatar_url,
             location_id=location_id,
+            state=ConnectionState.PENDING,
         )
+
+    def authenticate(
+        self,
+        websocket: WebSocket,
+        user_id: str,
+        username: str,
+    ):
+        if websocket in self.active_connections:
+            info = self.active_connections[websocket]
+            info.state = ConnectionState.AUTHENTICATED
+            info.user_id = user_id
+            info.username = username
+
+    def is_authenticated(self, websocket: WebSocket) -> bool:
+        info = self.get_info(websocket)
+        return info.state == ConnectionState.AUTHENTICATED
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
@@ -42,15 +67,20 @@ class ConnectionManager:
 
     def get_info(self, websocket: WebSocket) -> ConnectionInfo:
         return self.active_connections.get(
-            websocket, ConnectionInfo("Anonymous", None, None, None, None)
+            websocket,
+            ConnectionInfo(
+                "Anonymous", None, None, None, None, state=ConnectionState.PENDING
+            ),
         )
 
     def get_username(self, websocket: WebSocket) -> str:
         info = self.get_info(websocket)
         return info.character_name or info.username or "Anonymous"
 
-    async def broadcast(self, message: str | dict, location_id: Optional[int] = None):
+    async def broadcast(self, message: str | dict, location_id: Optional[str] = None):
         for connection, info in self.active_connections.items():
+            if info.state != ConnectionState.AUTHENTICATED:
+                continue
             if location_id is None or info.location_id == location_id:
                 if isinstance(message, dict):
                     import json
@@ -69,11 +99,13 @@ class ConnectionManager:
 
     def find_connection_by_username(self, username: str) -> Optional[WebSocket]:
         for connection, info in self.active_connections.items():
+            if info.state != ConnectionState.AUTHENTICATED:
+                continue
             if info.username == username or info.character_name == username:
                 return connection
         return None
 
-    def set_location(self, websocket: WebSocket, location_id: int):
+    def set_location(self, websocket: WebSocket, location_id: str):
         if websocket in self.active_connections:
             self.active_connections[websocket].location_id = location_id
 
@@ -82,7 +114,7 @@ class ConnectionManager:
         websocket: WebSocket,
         character_name: str,
         avatar_url: Optional[str] = None,
-        character_id: Optional[int] = None,
+        character_id: Optional[str] = None,
     ):
         if websocket in self.active_connections:
             info = self.active_connections[websocket]
@@ -102,7 +134,7 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections[websocket].ooc_username = ooc_username
 
-    def get_users_on_location(self, location_id: int) -> list[dict]:
+    def get_users_on_location(self, location_id: str) -> list[dict]:
         """
         Get all users on a location.
 
@@ -113,6 +145,8 @@ class ConnectionManager:
         users = []
 
         for connection, info in self.active_connections.items():
+            if info.state != ConnectionState.AUTHENTICATED:
+                continue
             if info.location_id == location_id:
                 key = (info.username, info.character_id)
                 if key not in seen_characters:
