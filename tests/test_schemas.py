@@ -172,6 +172,26 @@ class TestCharacterSchemas:
         update = CharacterUpdate(avatar_url="javascript:alert('xss')")
         assert update.avatar_url is None
 
+    def test_character_update_accepts_https_url(self):
+        """CharacterUpdate should accept valid https URLs."""
+        update = CharacterUpdate(avatar_url="https://example.com/avatar.jpg")
+        assert update.avatar_url == "https://example.com/avatar.jpg"
+
+    def test_character_update_accepts_static_path(self):
+        """CharacterUpdate should accept static paths."""
+        update = CharacterUpdate(avatar_url="/static/assets/avatar.png")
+        assert update.avatar_url == "/static/assets/avatar.png"
+
+    def test_character_update_rejects_data_url(self):
+        """CharacterUpdate should reject data: URLs."""
+        update = CharacterUpdate(avatar_url="data:image/png;base64,abc123")
+        assert update.avatar_url is None
+
+    def test_character_update_accepts_usr_path(self):
+        """CharacterUpdate should accept /usr/ paths."""
+        update = CharacterUpdate(avatar_url="/usr/avatars/my_avatar.png")
+        assert update.avatar_url == "/usr/avatars/my_avatar.png"
+
 
 class TestLocationSchemas:
     """Tests for location-related schemas."""

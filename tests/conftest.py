@@ -11,6 +11,9 @@ from pathlib import Path
 import sys
 
 os.environ["TESTING"] = "true"
+os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+os.environ["ALGORITHM"] = "HS256"
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

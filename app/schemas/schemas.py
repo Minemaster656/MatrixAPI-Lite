@@ -34,18 +34,9 @@ def is_safe_static_path(url: Optional[str]) -> bool:
     if not url:
         return False
     url = url.strip().lower()
-    return url.startswith("/static/") or url.startswith("/usr/")
-    url = url.strip()
-    if not url:
-        return None
-    allowed_schemes = ("http://", "https://", "/")
-    if not any(url.lower().startswith(scheme) for scheme in allowed_schemes):
-        return None
-    if url.lower().startswith("javascript:"):
-        return None
-    if url.lower().startswith("data:"):
-        return None
-    return url
+    return (
+        url.startswith("/static/") or url.startswith("/usr/") or url.startswith("/cdn/")
+    )
 
 
 # User schemas
@@ -123,6 +114,16 @@ class CharacterBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
+    avatar_url: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v):
+        sanitized = sanitize_url(v)
+        if sanitized is None and v is not None:
+            if not is_safe_static_path(v):
+                return None
+        return sanitized if sanitized else v
 
 
 class CharacterCreate(CharacterBase):
@@ -155,7 +156,7 @@ class CharacterRead(CharacterBase):
 
     id: str
     owner_id: str
-    avatar_url: Optional[str]
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

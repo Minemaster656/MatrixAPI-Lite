@@ -53,8 +53,8 @@ async function init() {
         return;
     }
     
-    if (preselectedCharId && characters.find(c => c.id === parseInt(preselectedCharId))) {
-        selectedCharacterId = parseInt(preselectedCharId);
+    if (preselectedCharId && characters.find(c => c.id === preselectedCharId)) {
+        selectedCharacterId = preselectedCharId;
         currentCharacterName = preselectedCharName;
     }
     
@@ -69,8 +69,8 @@ function renderCharacterSelect(characters) {
     if (!container) return;
     container.innerHTML = characters.map(char => `
         <div class="character-option ${char.id === selectedCharacterId ? 'selected' : ''}" 
-             onclick="selectCharacter(${char.id}, '${escapeHtml(char.name)}')">
-            <img src="${char.avatar_url}" alt="${char.name}">
+             onclick="selectCharacter('${escapeJs(char.id)}', '${escapeJs(char.name)}', this)">
+            <img src="${escapeHtml(char.avatar_url || '')}" alt="${escapeHtml(char.name)}">
             <div>
                 <div class="text-white font-medium">${escapeHtml(char.name)}</div>
                 <div class="text-gray-400 text-sm truncate">${escapeHtml(char.description) || 'Без описания'}</div>
@@ -79,13 +79,15 @@ function renderCharacterSelect(characters) {
     `).join('');
 }
 
-function selectCharacter(id, name) {
+function selectCharacter(id, name, element) {
     selectedCharacterId = id;
     currentCharacterName = name;
     document.querySelectorAll('.character-option').forEach(el => {
         el.classList.remove('selected');
     });
-    event.currentTarget.classList.add('selected');
+    if (element) {
+        element.classList.add('selected');
+    }
 }
 
 async function loadLocations() {
@@ -101,7 +103,7 @@ async function loadLocations() {
 }
 
 function joinChat() {
-    const locationId = parseInt(document.getElementById('location-select').value);
+    const locationId = document.getElementById('location-select').value;
     
     if (!selectedCharacterId) {
         alert('Выберите персонажа');
@@ -473,6 +475,16 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function escapeJs(text) {
+    if (!text) return '';
+    return text
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
 }
 
 document.getElementById('message')?.addEventListener('keypress', (e) => {

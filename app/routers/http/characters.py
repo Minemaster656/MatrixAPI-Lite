@@ -72,7 +72,8 @@ def create_character(
             name=character_data.name,
             description=character_data.description,
             owner_id=owner_id,
-            avatar_url=get_default_avatar(character_data.name),
+            avatar_url=character_data.avatar_url
+            or get_default_avatar(character_data.name),
         )
         session.add(character)
         session.commit()
