@@ -1,0 +1,36 @@
+{
+  "name": "Площадь",
+  "type": "location",
+  "description": "Центральная площадь города",
+  "created_at": "2026-02-23T18:57:57.830905",
+  "updated_at": "2026-02-23T18:57:57.830905",
+  "parent": null,
+  "children": [],
+  "properties": {
+    "max_players": 100,
+    "is_public": true,
+    "is_active": true,
+    "allow_combat": false,
+    "allow_trading": true,
+    "allow_chat": true,
+    "background_url": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1920"
+  },
+  "metadata": {
+    "author": "system",
+    "version": "1.0.0",
+    "tags": ["square", "city", "central", "market"],
+    "difficulty": "easy",
+    "source": "migrated_from_db"
+  },
+  "content": {
+    "description": "Центральная площадь города",
+    "atmosphere": "оживленная, шумная",
+    "weather": "",
+    "terrain": "outdoor",
+    "resources": [],
+    "npcs": [],
+    "events": []
+  },
+  "exits": {},
+  "connections": []
+}

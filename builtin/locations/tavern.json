@@ -1,0 +1,36 @@
+{
+  "name": "Таверна",
+  "type": "location",
+  "description": "Уютное место для отдыха путников",
+  "created_at": "2026-02-23T18:57:57.830705",
+  "updated_at": "2026-02-23T18:57:57.830705",
+  "parent": null,
+  "children": [],
+  "properties": {
+    "max_players": 50,
+    "is_public": true,
+    "is_active": true,
+    "allow_combat": false,
+    "allow_trading": true,
+    "allow_chat": true,
+    "background_url": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1920"
+  },
+  "metadata": {
+    "author": "system",
+    "version": "1.0.0",
+    "tags": ["tavern", "rest", "social"],
+    "difficulty": "easy",
+    "source": "migrated_from_db"
+  },
+  "content": {
+    "description": "Уютное место для отдыха путников",
+    "atmosphere": "теплая, дружелюбная",
+    "weather": "",
+    "terrain": " indoor",
+    "resources": [],
+    "npcs": [],
+    "events": []
+  },
+  "exits": {},
+  "connections": []
+}

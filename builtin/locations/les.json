@@ -1,0 +1,36 @@
+{
+  "name": "Лес",
+  "type": "location",
+  "description": "Загадочный лес",
+  "created_at": "2026-02-23T18:57:57.831015",
+  "updated_at": "2026-02-23T18:57:57.831015",
+  "parent": null,
+  "children": [],
+  "properties": {
+    "max_players": 20,
+    "is_public": true,
+    "is_active": true,
+    "allow_combat": true,
+    "allow_trading": false,
+    "allow_chat": true,
+    "background_url": "https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920"
+  },
+  "metadata": {
+    "author": "system",
+    "version": "1.0.0",
+    "tags": ["forest", "nature", "mysterious"],
+    "difficulty": "hard",
+    "source": "migrated_from_db"
+  },
+  "content": {
+    "description": "Загадочный лес",
+    "atmosphere": "таинственная, мрачная",
+    "weather": "",
+    "terrain": "outdoor",
+    "resources": [],
+    "npcs": [],
+    "events": []
+  },
+  "exits": {},
+  "connections": []
+}
